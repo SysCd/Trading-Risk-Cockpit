@@ -29,8 +29,12 @@ PRICE_SYMBOLS = {
     "XAGUSD": "SI=F",
     "XAUUSD": "GC=F",
     "OIL": "CL=F",
+    "CRUDE": "CL=F",
     "BTCUSD": "BTC-USD",
     "ETHUSD": "ETH-USD",
+    "EURUSD": "EURUSD=X",
+    "GBPUSD": "GBPUSD=X",
+    "USDJPY": "JPY=X",
 }
 
 FX_SYMBOLS = {

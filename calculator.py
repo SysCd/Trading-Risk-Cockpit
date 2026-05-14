@@ -24,6 +24,7 @@ class TradeInputs:
     max_risk_gbp: float
     support_line: float
     buffer_percent: float
+    leverage: float = 1.0
     spread_cost: float = 0.0
     overnight_fee: float = 0.0
     commission: float = 0.0
@@ -36,8 +37,11 @@ class CalculationResult:
     stop_loss_percent: float
     invalidation_stop_price: float
     units: float
+    leverage: float
     exposure_local: float
     exposure_gbp: float
+    required_margin_local: float
+    required_margin_gbp: float
     potential_profit_gbp: float
     potential_loss_gbp: float
     net_expected_profit_gbp: float
@@ -71,6 +75,8 @@ def calculate_trade(values: TradeInputs) -> CalculationResult:
         errors.append("Max GBP risk must be above zero.")
     if values.buffer_percent < 0:
         errors.append("Buffer percent cannot be negative.")
+    if values.leverage <= 0:
+        errors.append("Leverage must be above zero.")
 
     stop_distance = abs(values.entry_price - values.stop_price)
     if stop_distance <= 0:
@@ -99,10 +105,13 @@ def calculate_trade(values: TradeInputs) -> CalculationResult:
             stop_loss_percent=stop_loss_percent,
             invalidation_stop_price=invalidation_stop,
             units=0,
+            leverage=max(values.leverage, 0),
             exposure_local=0,
             exposure_gbp=0,
+            required_margin_local=0,
+            required_margin_gbp=0,
             potential_profit_gbp=0,
-            potential_loss_gbp=values.max_risk_gbp,
+            potential_loss_gbp=0,
             net_expected_profit_gbp=0,
             risk_reward=0,
             valid=False,
@@ -114,8 +123,10 @@ def calculate_trade(values: TradeInputs) -> CalculationResult:
     units = values.max_risk_gbp / (stop_distance * values.fx_rate_to_gbp)
     exposure_local = units * values.entry_price
     exposure_gbp = exposure_local * values.fx_rate_to_gbp
+    required_margin_local = exposure_local / values.leverage
+    required_margin_gbp = exposure_gbp / values.leverage
     potential_profit_gbp = units * abs(values.take_profit_price - values.entry_price) * values.fx_rate_to_gbp
-    potential_loss_gbp = values.max_risk_gbp
+    potential_loss_gbp = units * stop_distance * values.fx_rate_to_gbp
     total_costs = values.spread_cost + values.overnight_fee + values.commission
     net_expected_profit_gbp = potential_profit_gbp - total_costs
     risk_reward = potential_profit_gbp / values.max_risk_gbp if values.max_risk_gbp else 0
@@ -131,6 +142,7 @@ def calculate_trade(values: TradeInputs) -> CalculationResult:
         warnings.append("Risk is based on exposure, not margin.")
     if values.asset_type == "3x ETP":
         warnings.append("Use wider stop and smaller size.")
+    warnings.append("Leverage affects margin, not P/L.")
 
     valid = not errors
     return CalculationResult(
@@ -138,8 +150,11 @@ def calculate_trade(values: TradeInputs) -> CalculationResult:
         stop_loss_percent=stop_loss_percent,
         invalidation_stop_price=invalidation_stop,
         units=units,
+        leverage=values.leverage,
         exposure_local=exposure_local,
         exposure_gbp=exposure_gbp,
+        required_margin_local=required_margin_local,
+        required_margin_gbp=required_margin_gbp,
         potential_profit_gbp=potential_profit_gbp,
         potential_loss_gbp=potential_loss_gbp,
         net_expected_profit_gbp=net_expected_profit_gbp,

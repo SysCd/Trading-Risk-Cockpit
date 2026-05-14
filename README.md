@@ -32,7 +32,7 @@ The app auto-fills the rest from instrument profiles and saved settings:
 - Spread, overnight fee, and commission default to `0`
 - Quick max-risk buttons: `£3`, `£5`, `£10`, `£20`, `£50`
 
-Use **Show Advanced fields** to edit FX rate, asset type, support/resistance, buffer, costs, notes, checklist, and screenshot path.
+Use **Show Advanced fields** to edit FX rate, asset type, leverage, support/resistance, buffer, costs, notes, checklist, and screenshot path.
 
 ## Instrument Profiles
 
@@ -41,8 +41,24 @@ Use **Show Advanced fields** to edit FX rate, asset type, support/resistance, bu
 - `NDX`, `SPX`: USD index aliases
 - `GER40`: EUR index
 - `UK100`: GBP index
-- `XAGUSD`, `XAUUSD`, `OIL`: USD commodity
+- `XAGUSD`, `XAUUSD`, `OIL`, `CRUDE`: USD commodity
 - `BTCUSD`, `ETHUSD`: USD crypto
+- Major forex pairs such as `EURUSD`, `GBPUSD`, and `USDJPY`: forex profile
+
+## Leverage And Margin
+
+The app auto-fills typical UK/EU retail CFD leverage defaults, and the leverage field can be manually overridden if your broker uses a different rate.
+
+- Stock CFDs such as `TSLA`, `NVDA`, `AMD`, `MSFT`, `PLTR`: `5x`
+- Major indices such as `TECH100`, `NDX`, `USA500`, `SPX`, `GER40`, `UK100`: `20x`
+- Major forex pairs such as `EURUSD`, `GBPUSD`, `USDJPY`: `30x`
+- Gold `XAUUSD`: `20x`
+- Silver `XAGUSD`: `10x`
+- Oil `OIL` / `CRUDE`: `10x`
+- Crypto `BTCUSD`, `ETHUSD`: `2x`
+- `3x ETP`: `1x` by default because it is already leveraged
+
+Leverage affects margin, not P/L. For stock CFDs, `5x` leverage means `GBP 100` margin controls `GBP 500` exposure. Profit and loss are calculated from the `GBP 500` exposure, not from the `GBP 100` margin.
 
 ## Trade Quality Dashboard
 
@@ -53,9 +69,10 @@ The top-right calculator panel shows compact status cards for:
 - Entry distance from support/resistance
 - Risk size
 - Exposure size
+- Margin required
 - Overall verdict
 
-Cards use green for good, yellow for caution, and red for bad. The verdict is `Ideal`, `Acceptable`, `Borderline`, or `Avoid`. The "What must improve?" box gives concise reasons such as low Risk:Reward, entry too far from support, stop too tight or wide, oversized position, invalid trade, daily loss limit hit, or max trades reached.
+Cards use green for good, yellow for caution, and red for bad. Each card shows the current value, the target range, and a small gap line where useful, such as `Need R:R +0.25`, `Entry 0.8% too far`, or `Stop too tight by 0.2%`. The verdict is `Ideal`, `Acceptable`, `Borderline`, or `Avoid`. The "What must improve?" box gives concise reasons such as low Risk:Reward, entry too far from support, stop too tight or wide, oversized position, invalid trade, daily loss limit hit, or max trades reached.
 
 ## Settings
 
@@ -79,7 +96,7 @@ The app includes `market_data.py` with a provider interface and a free/simple `y
 Supported refresh targets include:
 
 - FX: `USDGBP`, `EURGBP`, `CHFGBP`, `JPYGBP`, `CADGBP`, `AUDGBP`, `NZDGBP`
-- Prices: `TSLA`, `NVDA`, `AMD`, `MSFT`, `PLTR`, `TECH100` / `NDX`, `USA500` / `SPX`, `GER40`, `UK100`, `XAGUSD`, `XAUUSD`, `OIL`
+- Prices: `TSLA`, `NVDA`, `AMD`, `MSFT`, `PLTR`, `TECH100` / `NDX`, `USA500` / `SPX`, `GER40`, `UK100`, `XAGUSD`, `XAUUSD`, `OIL` / `CRUDE`, `BTCUSD`, `ETHUSD`, `EURUSD`, `GBPUSD`, `USDJPY`
 
 Buttons:
 
@@ -101,8 +118,10 @@ Safety notes:
 - Units = `Max GBP Risk / (Stop distance * FX rate to GBP)`
 - Exposure local = `Units * Entry`
 - Exposure GBP = `Units * Entry * FX rate to GBP`
+- Required margin local = `Exposure local / Leverage`
+- Required margin GBP = `Exposure GBP / Leverage`
 - Potential GBP profit = `Units * ABS(Take Profit - Entry) * FX rate to GBP`
-- Potential GBP loss = `Max GBP Risk`
+- Potential GBP loss = `Units * ABS(Entry - Stop) * FX rate to GBP`
 - Net expected profit = `Potential GBP profit - spread cost - overnight fee - commission`
 - Risk:Reward = `Potential GBP profit / Max GBP Risk`
 - Long invalidation stop = `Support * (1 - Buffer%)`
@@ -140,9 +159,11 @@ Expected interpretation:
 - Stop distance is `5`.
 - Position size is approximately `12.66` contracts or units.
 - Exposure is approximately `USD 2,025.32`, or `GBP 1,600.00`.
+- At `5x` leverage, required margin is approximately `USD 405.06`, or `GBP 320.00`.
 - Potential profit is approximately `GBP 120.00`.
+- Potential loss is approximately `GBP 50.00`.
 - Risk:Reward is approximately `2.40`.
-- The CFD exposure warning is shown.
+- The CFD exposure and leverage warnings are shown.
 
 ## CSV Export
 

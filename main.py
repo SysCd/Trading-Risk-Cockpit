@@ -52,8 +52,35 @@ INSTRUMENT_PROFILES = {
     "XAGUSD": ("Commodity", "USD"),
     "XAUUSD": ("Commodity", "USD"),
     "OIL": ("Commodity", "USD"),
+    "CRUDE": ("Commodity", "USD"),
     "BTCUSD": ("Crypto", "USD"),
     "ETHUSD": ("Crypto", "USD"),
+    "EURUSD": ("Forex", "USD"),
+    "GBPUSD": ("Forex", "USD"),
+    "USDJPY": ("Forex", "JPY"),
+}
+
+LEVERAGE_DEFAULTS = {
+    "TSLA": 5,
+    "NVDA": 5,
+    "AMD": 5,
+    "MSFT": 5,
+    "PLTR": 5,
+    "TECH100": 20,
+    "NDX": 20,
+    "USA500": 20,
+    "SPX": 20,
+    "GER40": 20,
+    "UK100": 20,
+    "XAUUSD": 20,
+    "XAGUSD": 10,
+    "OIL": 10,
+    "CRUDE": 10,
+    "BTCUSD": 2,
+    "ETHUSD": 2,
+    "EURUSD": 30,
+    "GBPUSD": 30,
+    "USDJPY": 30,
 }
 
 DEFAULT_SETTINGS = {
@@ -89,6 +116,9 @@ class TradingRiskCockpit(tk.Tk):
         self.api_vars: dict[str, tk.StringVar] = {}
         self.output_labels: dict[str, ttk.Label] = {}
         self.quality_cards: dict[str, dict[str, tk.Label | tk.Frame]] = {}
+        self.summary_cards: dict[str, tk.Label] = {}
+        self.input_widgets: list[tk.Widget] = []
+        self.improve_items: list[ttk.Label] = []
         self.check_vars: list[tk.BooleanVar] = []
         self.last_price_var = tk.StringVar(value="Last price: manual")
         self.last_fx_var = tk.StringVar(value="FX source: saved default")
@@ -105,25 +135,32 @@ class TradingRiskCockpit(tk.Tk):
     def _setup_style(self) -> None:
         style = ttk.Style(self)
         style.theme_use("clam")
-        bg = "#f5f7fa"
+        bg = "#f8fafc"
         panel = "#ffffff"
         text = "#1f2937"
         accent = "#2563eb"
+        border = "#e2e8f0"
         self.configure(bg=bg)
         style.configure(".", background=bg, foreground=text, font=("Helvetica Neue", 12))
         style.configure("TFrame", background=bg)
-        style.configure("Panel.TFrame", background=panel, relief="solid", borderwidth=1)
+        style.configure("Panel.TFrame", background=panel, relief="flat", borderwidth=0)
         style.configure("Advanced.TFrame", background=panel)
         style.configure("TLabel", background=bg, foreground=text)
         style.configure("Panel.TLabel", background=panel)
-        style.configure("Header.TLabel", font=("Helvetica Neue", 20, "bold"), background=bg)
+        style.configure("Header.TLabel", font=("Helvetica Neue", 22, "bold"), background=bg)
+        style.configure("Subtle.TLabel", background=panel, foreground="#64748b", font=("Helvetica Neue", 10))
+        style.configure("Section.TLabel", background=panel, foreground=text, font=("Helvetica Neue", 13, "bold"))
         style.configure("Rule.TLabel", font=("Helvetica Neue", 11, "bold"), background=panel, foreground="#334155")
-        style.configure("TButton", padding=(10, 6), font=("Helvetica Neue", 11))
-        style.configure("Accent.TButton", background=accent, foreground="#ffffff")
-        style.configure("Risk.TButton", padding=(8, 5), font=("Helvetica Neue", 11, "bold"))
-        style.configure("Treeview", rowheight=28, font=("Helvetica Neue", 11), background="#ffffff", fieldbackground="#ffffff")
+        style.configure("TButton", padding=(12, 7), font=("Helvetica Neue", 11), borderwidth=0)
+        style.configure("Accent.TButton", background=accent, foreground="#ffffff", borderwidth=0)
+        style.configure("Secondary.TButton", background="#eef2f7", foreground=text, borderwidth=0)
+        style.configure("Risk.TButton", padding=(9, 5), font=("Helvetica Neue", 11, "bold"), background="#eef2f7")
+        style.configure("TEntry", padding=(8, 7), fieldbackground="#ffffff", bordercolor=border, lightcolor=border, darkcolor=border)
+        style.configure("TCombobox", padding=(8, 7), fieldbackground="#ffffff", bordercolor=border, lightcolor=border, darkcolor=border)
+        style.configure("Treeview", rowheight=31, font=("Helvetica Neue", 11), background="#ffffff", fieldbackground="#ffffff", borderwidth=0)
         style.configure("Treeview.Heading", font=("Helvetica Neue", 11, "bold"))
-        style.configure("TNotebook.Tab", padding=(16, 8), font=("Helvetica Neue", 12, "bold"))
+        style.configure("TNotebook", background=bg, borderwidth=0)
+        style.configure("TNotebook.Tab", padding=(18, 9), font=("Helvetica Neue", 12, "bold"), background="#eef2f7")
         self.colors = {
             "green": "#047857",
             "green_bg": "#dcfce7",
@@ -135,10 +172,12 @@ class TradingRiskCockpit(tk.Tk):
             "muted": "#64748b",
             "text": text,
             "panel": panel,
+            "border": border,
+            "bg": bg,
         }
 
     def _build_ui(self) -> None:
-        header = ttk.Frame(self, padding=(18, 14, 18, 4))
+        header = ttk.Frame(self, padding=(22, 16, 22, 2))
         header.pack(fill="x")
         ttk.Label(header, text="Trading Risk Cockpit", style="Header.TLabel").pack(side="left")
         ttk.Label(header, text="No calculator = no trade.", foreground="#b91c1c", font=("Helvetica Neue", 13, "bold")).pack(side="right")
@@ -159,33 +198,41 @@ class TradingRiskCockpit(tk.Tk):
         self._build_dashboard_tab()
         self._build_settings_tab()
 
-    def _panel(self, parent: tk.Widget, padding: int = 12) -> ttk.Frame:
-        return ttk.Frame(parent, style="Panel.TFrame", padding=padding)
+    def _panel(self, parent: tk.Widget, padding: int = 16) -> ttk.Frame:
+        frame = ttk.Frame(parent, style="Panel.TFrame", padding=padding)
+        return frame
+
+    def _card(self, parent: tk.Widget, padding: int = 16) -> tk.Frame:
+        return tk.Frame(
+            parent,
+            bg=self.colors["panel"],
+            highlightbackground=self.colors["border"],
+            highlightthickness=1,
+            bd=0,
+            padx=padding,
+            pady=padding,
+        )
 
     def _build_calculator_tab(self) -> None:
-        self.calculator_tab.columnconfigure(0, weight=2)
-        self.calculator_tab.columnconfigure(1, weight=2)
+        self.calculator_tab.columnconfigure(0, weight=2, uniform="cockpit")
+        self.calculator_tab.columnconfigure(1, weight=2, uniform="cockpit")
+        self.calculator_tab.columnconfigure(2, weight=2, uniform="cockpit")
         self.calculator_tab.rowconfigure(0, weight=1)
 
         inputs = self._panel(self.calculator_tab)
-        inputs.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        right = ttk.Frame(self.calculator_tab)
-        right.grid(row=0, column=1, sticky="nsew")
-        right.rowconfigure(0, weight=0)
-        right.rowconfigure(1, weight=1)
-        right.rowconfigure(2, weight=1)
-        right.columnconfigure(0, weight=1)
-
-        quality = self._panel(right)
-        quality.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        outputs = self._panel(right)
-        outputs.grid(row=1, column=0, sticky="nsew", pady=(0, 10))
-        self.checklist_panel = self._panel(right)
-        self.checklist_panel.grid(row=2, column=0, sticky="nsew")
+        inputs.grid(row=0, column=0, sticky="nsew", padx=(0, 12))
+        quality = self._panel(self.calculator_tab)
+        quality.grid(row=0, column=1, sticky="nsew", padx=(0, 12))
+        outputs = self._panel(self.calculator_tab)
+        outputs.grid(row=0, column=2, sticky="nsew")
+        quality.columnconfigure(0, weight=1)
+        outputs.columnconfigure(0, weight=1)
 
         self._build_inputs(inputs)
         self._build_quality_dashboard(quality)
         self._build_outputs(outputs)
+        self.checklist_panel = self._panel(self.advanced_frame, padding=12)
+        self.checklist_panel.grid(row=12, column=0, columnspan=3, sticky="ew", pady=(10, 0))
         self._build_checklist(self.checklist_panel)
         self._toggle_advanced()
 
@@ -195,6 +242,7 @@ class TradingRiskCockpit(tk.Tk):
         entry = ttk.Entry(parent, textvariable=var, width=width)
         entry.grid(row=row, column=1, sticky="ew", pady=4, padx=(8, 0))
         self.vars[key] = var
+        self.input_widgets.append(entry)
         return entry
 
     def _add_combo(self, parent: ttk.Frame, row: int, label: str, key: str, values: tuple[str, ...], default: str) -> ttk.Combobox:
@@ -203,28 +251,30 @@ class TradingRiskCockpit(tk.Tk):
         combo = ttk.Combobox(parent, textvariable=var, values=values, state="readonly")
         combo.grid(row=row, column=1, sticky="ew", pady=4, padx=(8, 0))
         self.vars[key] = var
+        self.input_widgets.append(combo)
         return combo
 
     def _build_inputs(self, parent: ttk.Frame) -> None:
         parent.columnconfigure(1, weight=1)
-        ttk.Label(parent, text="Quick Trade Mode", style="Panel.TLabel", font=("Helvetica Neue", 16, "bold")).grid(
+        ttk.Label(parent, text="Trade Input", style="Panel.TLabel", font=("Helvetica Neue", 17, "bold")).grid(
             row=0, column=0, columnspan=3, sticky="w", pady=(0, 8)
         )
         ttk.Label(
             parent,
-            text="Six fields, calculate, done. Advanced data auto-fills from profiles and settings.",
+            text="Quick mode keeps the six decisions that matter. Profiles fill the rest.",
             style="Panel.TLabel",
             foreground=self.colors["muted"],
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 8))
 
-        self._add_entry(parent, 2, "Instrument", "instrument", "AMD")
+        self._add_entry(parent, 2, "Instrument / ticker", "instrument", "AMD")
         self.vars["instrument"].trace_add("write", lambda *_: self._on_instrument_change())
         self._add_combo(parent, 3, "Direction", "direction", DIRECTIONS, "Long")
         entry = self._add_entry(parent, 4, "Entry price", "entry", "160")
-        ttk.Button(parent, text="Refresh price", command=self.refresh_price).grid(row=4, column=2, sticky="ew", padx=(8, 0), pady=4)
+        ttk.Button(parent, text="Refresh", style="Secondary.TButton", command=self.refresh_price).grid(row=4, column=2, sticky="ew", padx=(8, 0), pady=4)
         self._add_entry(parent, 5, "Stop price", "stop", "155")
         self._add_entry(parent, 6, "Take profit price", "take_profit", "172")
-        self._add_entry(parent, 7, "Max GBP risk", "max_risk", DEFAULT_SETTINGS["default_risk"])
+        max_risk_entry = self._add_entry(parent, 7, "Max GBP risk", "max_risk", DEFAULT_SETTINGS["default_risk"])
+        max_risk_entry.bind("<Return>", lambda _event: self.calculate())
 
         risk_buttons = ttk.Frame(parent, style="Panel.TFrame")
         risk_buttons.grid(row=8, column=1, columnspan=2, sticky="w", padx=(8, 0), pady=(0, 8))
@@ -237,37 +287,39 @@ class TradingRiskCockpit(tk.Tk):
             row=9, column=0, columnspan=3, sticky="w", pady=(0, 6)
         )
 
-        self.advanced_button = ttk.Button(parent, text="Show Advanced fields", command=self._toggle_advanced_requested)
+        self.advanced_button = ttk.Button(parent, text="Show advanced settings", style="Secondary.TButton", command=self._toggle_advanced_requested)
         self.advanced_button.grid(row=10, column=0, columnspan=3, sticky="ew", pady=(8, 6))
         self.advanced_frame = ttk.Frame(parent, style="Advanced.TFrame")
         self.advanced_frame.columnconfigure(1, weight=1)
 
         self._add_combo(self.advanced_frame, 0, "Asset type", "asset_type", ASSET_TYPES, "CFD")
         self._add_combo(self.advanced_frame, 1, "Currency", "currency", CURRENCIES, "USD")
-        self._add_entry(self.advanced_frame, 2, "FX rate to GBP", "fx_rate", DEFAULT_SETTINGS["fx_USD"])
-        ttk.Button(self.advanced_frame, text="Refresh FX", command=self.refresh_fx).grid(row=2, column=2, sticky="ew", padx=(8, 0), pady=4)
+        self._add_entry(self.advanced_frame, 2, "Leverage", "leverage", "5")
+        self._add_entry(self.advanced_frame, 3, "FX rate to GBP", "fx_rate", DEFAULT_SETTINGS["fx_USD"])
+        ttk.Button(self.advanced_frame, text="Refresh FX", command=self.refresh_fx).grid(row=3, column=2, sticky="ew", padx=(8, 0), pady=4)
         ttk.Label(self.advanced_frame, textvariable=self.last_fx_var, style="Panel.TLabel", foreground=self.colors["muted"]).grid(
-            row=3, column=0, columnspan=3, sticky="w", pady=(0, 6)
+            row=4, column=0, columnspan=3, sticky="w", pady=(0, 6)
         )
-        self._add_entry(self.advanced_frame, 4, "Support / resistance line", "support", "")
-        self._add_entry(self.advanced_frame, 5, "Custom buffer %", "custom_buffer", DEFAULT_SETTINGS["default_buffer"])
-        self._add_entry(self.advanced_frame, 6, "Spread cost", "spread_cost", "0")
-        self._add_entry(self.advanced_frame, 7, "Overnight fee", "overnight_fee", "0")
-        self._add_entry(self.advanced_frame, 8, "Commission", "commission", "0")
-        self._add_entry(self.advanced_frame, 9, "Screenshot path", "screenshot_path", "")
-        ttk.Label(self.advanced_frame, text="Notes / setup reason", style="Panel.TLabel").grid(row=10, column=0, sticky="nw", pady=4)
+        self._add_entry(self.advanced_frame, 5, "Support / resistance line", "support", "")
+        self._add_entry(self.advanced_frame, 6, "Custom buffer %", "custom_buffer", DEFAULT_SETTINGS["default_buffer"])
+        self._add_entry(self.advanced_frame, 7, "Spread cost", "spread_cost", "0")
+        self._add_entry(self.advanced_frame, 8, "Overnight fee", "overnight_fee", "0")
+        self._add_entry(self.advanced_frame, 9, "Commission", "commission", "0")
+        self._add_entry(self.advanced_frame, 10, "Screenshot path", "screenshot_path", "")
+        ttk.Label(self.advanced_frame, text="Notes / setup reason", style="Panel.TLabel").grid(row=11, column=0, sticky="nw", pady=4)
         self.notes_text = tk.Text(self.advanced_frame, height=4, wrap="word", font=("Helvetica Neue", 12), relief="solid", bd=1)
-        self.notes_text.grid(row=10, column=1, columnspan=2, sticky="ew", padx=(8, 0), pady=4)
+        self.notes_text.grid(row=11, column=1, columnspan=2, sticky="ew", padx=(8, 0), pady=4)
 
         buttons = ttk.Frame(parent, style="Panel.TFrame")
         buttons.grid(row=12, column=0, columnspan=3, sticky="ew", pady=(12, 0))
         ttk.Button(buttons, text="Calculate", style="Accent.TButton", command=self.calculate).pack(side="left", padx=(0, 8))
-        ttk.Button(buttons, text="Save Trade", command=self.save_trade).pack(side="left", padx=4)
-        ttk.Button(buttons, text="Clear Form", command=self.clear_form).pack(side="left", padx=4)
-        ttk.Button(buttons, text="Copy Calculation Result", command=self.copy_calculation).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Save Trade", style="Secondary.TButton", command=self.save_trade).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Clear", style="Secondary.TButton", command=self.clear_form).pack(side="left", padx=4)
+        ttk.Button(buttons, text="Copy", style="Secondary.TButton", command=self.copy_calculation).pack(side="left", padx=4)
 
         rules = self._panel(parent, padding=10)
         rules.grid(row=13, column=0, columnspan=3, sticky="ew", pady=(12, 0))
+        ttk.Label(rules, text="Trading rules", style="Section.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 4))
         for idx, text in enumerate(
             (
                 "No calculator = no trade.",
@@ -277,13 +329,13 @@ class TradingRiskCockpit(tk.Tk):
                 "Stop-loss goes where the idea is invalidated.",
             )
         ):
-            ttk.Label(rules, text=text, style="Rule.TLabel").grid(row=idx, column=0, sticky="w", pady=2)
+            ttk.Label(rules, text=text, style="Subtle.TLabel").grid(row=idx + 1, column=0, sticky="w", pady=1)
         entry.focus_set()
 
     def _build_quality_dashboard(self, parent: ttk.Frame) -> None:
-        parent.columnconfigure((0, 1, 2), weight=1)
-        ttk.Label(parent, text="Trade Quality Dashboard", style="Panel.TLabel", font=("Helvetica Neue", 16, "bold")).grid(
-            row=0, column=0, columnspan=3, sticky="w", pady=(0, 8)
+        parent.columnconfigure((0, 1), weight=1)
+        ttk.Label(parent, text="Trade Quality", style="Panel.TLabel", font=("Helvetica Neue", 17, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 8)
         )
         labels = (
             "Risk:Reward",
@@ -291,54 +343,92 @@ class TradingRiskCockpit(tk.Tk):
             "Entry distance",
             "Risk size",
             "Exposure size",
+            "Margin required",
             "Overall verdict",
         )
         for idx, label in enumerate(labels):
-            frame = tk.Frame(parent, bg="#f8fafc", highlightbackground="#d8dee8", highlightthickness=1, padx=10, pady=8)
-            frame.grid(row=1 + idx // 3, column=idx % 3, sticky="ew", padx=4, pady=4)
-            title = tk.Label(frame, text=label, bg="#f8fafc", fg=self.colors["muted"], font=("Helvetica Neue", 10, "bold"))
-            title.pack(anchor="w")
-            value = tk.Label(frame, text="-", bg="#f8fafc", fg=self.colors["text"], font=("Helvetica Neue", 14, "bold"))
+            frame = tk.Frame(parent, bg="#ffffff", highlightbackground=self.colors["border"], highlightthickness=1, padx=12, pady=10)
+            frame.grid(row=1 + idx // 2, column=idx % 2, sticky="ew", padx=4, pady=4)
+            top = tk.Frame(frame, bg="#ffffff")
+            top.pack(fill="x")
+            title = tk.Label(top, text=label, bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 10, "bold"))
+            title.pack(side="left", anchor="w")
+            badge = tk.Label(top, text="-", bg="#e2e8f0", fg=self.colors["muted"], font=("Helvetica Neue", 8, "bold"), padx=6, pady=1)
+            badge.pack(side="right")
+            value = tk.Label(frame, text="-", bg="#ffffff", fg=self.colors["text"], font=("Helvetica Neue", 14, "bold"), justify="left")
             value.pack(anchor="w")
-            self.quality_cards[label] = {"frame": frame, "title": title, "value": value}
+            target = tk.Label(frame, text="", bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 9), justify="left")
+            target.pack(anchor="w")
+            gap = tk.Label(frame, text="", bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 9), justify="left")
+            gap.pack(anchor="w")
+            self.quality_cards[label] = {"frame": frame, "title": title, "badge": badge, "value": value, "target": target, "gap": gap}
 
         ttk.Label(parent, text="What must improve?", style="Panel.TLabel", font=("Helvetica Neue", 13, "bold")).grid(
-            row=3, column=0, columnspan=3, sticky="w", pady=(10, 3)
+            row=5, column=0, columnspan=2, sticky="w", pady=(10, 3)
         )
-        self.improve_text = tk.Text(parent, height=3, wrap="word", font=("Helvetica Neue", 11), relief="solid", bd=1)
-        self.improve_text.grid(row=4, column=0, columnspan=3, sticky="ew")
+        self.improve_frame = ttk.Frame(parent, style="Panel.TFrame")
+        self.improve_frame.grid(row=6, column=0, columnspan=2, sticky="ew")
         self._write_improvements(["Calculate a trade to see improvement notes."])
 
     def _build_outputs(self, parent: ttk.Frame) -> None:
-        parent.columnconfigure(1, weight=1)
-        ttk.Label(parent, text="Outputs", style="Panel.TLabel", font=("Helvetica Neue", 16, "bold")).grid(
-            row=0, column=0, columnspan=2, sticky="w", pady=(0, 8)
+        parent.columnconfigure(0, weight=1)
+        ttk.Label(parent, text="Trade Summary", style="Panel.TLabel", font=("Helvetica Neue", 17, "bold")).grid(
+            row=0, column=0, sticky="w", pady=(0, 8)
         )
-        rows = [
-            ("Stop distance", "stop_distance"),
-            ("Stop-loss %", "stop_loss_percent"),
-            ("Invalidation stop", "invalidation_stop"),
-            ("Units / shares / contracts", "units"),
-            ("Exposure local", "exposure_local"),
-            ("Exposure GBP", "exposure_gbp"),
-            ("Potential GBP profit", "potential_profit"),
-            ("Potential GBP loss", "potential_loss"),
-            ("Net expected profit", "net_profit"),
-            ("Risk:Reward", "risk_reward"),
-            ("Trade valid?", "valid"),
-            ("Risk label", "risk_label"),
+        sections = [
+            ("Position", [("Units / shares / contracts", "units"), ("Leverage used", "leverage"), ("Stop distance", "stop_distance")]),
+            (
+                "Exposure & Margin",
+                [
+                    ("Exposure GBP", "exposure_gbp"),
+                    ("Margin GBP", "required_margin_gbp"),
+                    ("Exposure local", "exposure_local"),
+                    ("Margin local", "required_margin_local"),
+                ],
+            ),
+            (
+                "Profit / Loss",
+                [
+                    ("Potential profit", "potential_profit"),
+                    ("Potential loss", "potential_loss"),
+                    ("Net expected profit", "net_profit"),
+                    ("P/L basis", "pl_basis"),
+                ],
+            ),
+            (
+                "Validation",
+                [
+                    ("Risk:Reward", "risk_reward"),
+                    ("Trade valid?", "valid"),
+                    ("Risk label", "risk_label"),
+                    ("Stop-loss %", "stop_loss_percent"),
+                    ("Invalidation stop", "invalidation_stop"),
+                ],
+            ),
         ]
-        for row, (label, key) in enumerate(rows, start=1):
-            ttk.Label(parent, text=label, style="Panel.TLabel").grid(row=row, column=0, sticky="w", pady=4)
-            value = ttk.Label(parent, text="-", style="Panel.TLabel", font=("Helvetica Neue", 12, "bold"))
-            value.grid(row=row, column=1, sticky="e", pady=4)
-            self.output_labels[key] = value
-        ttk.Label(parent, text="Warnings", style="Panel.TLabel", font=("Helvetica Neue", 13, "bold")).grid(
-            row=13, column=0, columnspan=2, sticky="w", pady=(12, 4)
+        row = 1
+        for title, items in sections:
+            card = self._summary_section(parent, title, items)
+            card.grid(row=row, column=0, sticky="ew", pady=(0, 10))
+            row += 1
+        ttk.Label(parent, text="Warnings", style="Section.TLabel").grid(row=row, column=0, sticky="w", pady=(2, 4))
+        self.warning_frame = ttk.Frame(parent, style="Panel.TFrame")
+        self.warning_frame.grid(row=row + 1, column=0, sticky="ew")
+
+    def _summary_section(self, parent: ttk.Frame, title: str, items: list[tuple[str, str]]) -> tk.Frame:
+        card = self._card(parent, padding=12)
+        card.columnconfigure(1, weight=1)
+        tk.Label(card, text=title, bg="#ffffff", fg=self.colors["text"], font=("Helvetica Neue", 12, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 6)
         )
-        self.warning_text = tk.Text(parent, height=6, wrap="word", font=("Helvetica Neue", 12), relief="solid", bd=1)
-        self.warning_text.grid(row=14, column=0, columnspan=2, sticky="nsew")
-        parent.rowconfigure(14, weight=1)
+        for idx, (label, key) in enumerate(items, start=1):
+            tk.Label(card, text=label, bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 10)).grid(
+                row=idx, column=0, sticky="w", pady=3
+            )
+            value = tk.Label(card, text="-", bg="#ffffff", fg=self.colors["text"], font=("Helvetica Neue", 12, "bold"), justify="right")
+            value.grid(row=idx, column=1, sticky="e", pady=3, padx=(12, 0))
+            self.output_labels[key] = value
+        return card
 
     def _build_checklist(self, parent: ttk.Frame) -> None:
         ttk.Label(parent, text="Advanced checklist", style="Panel.TLabel", font=("Helvetica Neue", 16, "bold")).grid(
@@ -357,15 +447,18 @@ class TradingRiskCockpit(tk.Tk):
         self.journal_tab.columnconfigure(0, weight=1)
         controls = self._panel(self.journal_tab)
         controls.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        ttk.Button(controls, text="Delete Selected Trade", command=self.delete_selected_trade).pack(side="left", padx=(0, 8))
-        ttk.Button(controls, text="Update Result for Selected Trade", command=self.update_selected_result).pack(side="left", padx=4)
-        ttk.Button(controls, text="Export CSV", command=self.export_csv).pack(side="left", padx=4)
+        ttk.Label(controls, text="Trade Journal", style="Panel.TLabel", font=("Helvetica Neue", 17, "bold")).pack(side="left", padx=(0, 16))
+        ttk.Button(controls, text="Update Result", style="Secondary.TButton", command=self.update_selected_result).pack(side="left", padx=4)
+        ttk.Button(controls, text="Export CSV", style="Secondary.TButton", command=self.export_csv).pack(side="left", padx=4)
+        ttk.Button(controls, text="Delete", style="Secondary.TButton", command=self.delete_selected_trade).pack(side="left", padx=4)
 
         self.tree = ttk.Treeview(self.journal_tab, columns=TRADE_COLUMNS, show="headings", selectmode="browse")
         for column in TRADE_COLUMNS:
-            self.tree.heading(column, text=column.replace("_", " ").title())
+            self.tree.heading(column, text=column.replace("_", " ").title(), command=lambda c=column: self._sort_tree(c, False))
             width = 90 if column not in {"notes", "lesson_learned"} else 180
             self.tree.column(column, width=width, minwidth=70, stretch=True)
+        self.tree.tag_configure("win", foreground=self.colors["green"])
+        self.tree.tag_configure("loss", foreground=self.colors["red"])
         self.tree.grid(row=1, column=0, sticky="nsew")
         self.tree.bind("<<TreeviewSelect>>", self._on_trade_select)
         scroll_y = ttk.Scrollbar(self.journal_tab, orient="vertical", command=self.tree.yview)
@@ -374,26 +467,51 @@ class TradingRiskCockpit(tk.Tk):
         scroll_x.grid(row=2, column=0, sticky="ew")
         self.tree.configure(yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
 
+    def _sort_tree(self, column: str, reverse: bool) -> None:
+        rows = [(self.tree.set(item, column), item) for item in self.tree.get_children("")]
+        try:
+            rows.sort(key=lambda item: float(str(item[0]).replace(",", "")), reverse=reverse)
+        except ValueError:
+            rows.sort(key=lambda item: str(item[0]).lower(), reverse=reverse)
+        for index, (_value, item) in enumerate(rows):
+            self.tree.move(item, "", index)
+        self.tree.heading(column, command=lambda: self._sort_tree(column, not reverse))
+
     def _build_dashboard_tab(self) -> None:
-        self.dashboard_tab.columnconfigure(0, weight=1)
-        self.dashboard_tab.columnconfigure(1, weight=1)
+        self.dashboard_tab.columnconfigure(0, weight=3)
+        self.dashboard_tab.columnconfigure(1, weight=2)
         metrics = self._panel(self.dashboard_tab)
         metrics.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
         self.dashboard_tab.rowconfigure(0, weight=1)
-        metrics.columnconfigure(1, weight=1)
-        ttk.Label(metrics, text="Performance", style="Panel.TLabel", font=("Helvetica Neue", 16, "bold")).grid(
-            row=0, column=0, columnspan=2, sticky="w", pady=(0, 8)
+        metrics.columnconfigure((0, 1, 2, 3), weight=1)
+        ttk.Label(metrics, text="Trading Dashboard", style="Panel.TLabel", font=("Helvetica Neue", 17, "bold")).grid(
+            row=0, column=0, columnspan=4, sticky="w", pady=(0, 10)
         )
         self.metric_labels: dict[str, ttk.Label] = {}
+        primary = [
+            "Total trades",
+            "Win rate %",
+            "Average R multiple",
+            "Total P/L",
+            "Average win",
+            "Average loss",
+            "Best trade",
+            "Worst trade",
+        ]
+        for idx, label in enumerate(primary):
+            card = self._card(metrics, padding=14)
+            card.grid(row=1 + idx // 4, column=idx % 4, sticky="ew", padx=5, pady=5)
+            tk.Label(card, text=label, bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 10, "bold")).pack(anchor="w")
+            value = tk.Label(card, text="-", bg="#ffffff", fg=self.colors["text"], font=("Helvetica Neue", 15, "bold"))
+            value.pack(anchor="w", pady=(4, 0))
+            self.metric_labels[label] = value
+
+        secondary = self._card(metrics, padding=14)
+        secondary.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(14, 0))
+        secondary.columnconfigure(1, weight=1)
         for idx, label in enumerate(
             (
-                "Total trades",
-                "Total P/L",
-                "Win rate %",
-                "Average win",
-                "Average loss",
                 "Profit factor",
-                "Average R multiple",
                 "Best instrument",
                 "Worst instrument",
                 "Most profitable setup",
@@ -402,52 +520,62 @@ class TradingRiskCockpit(tk.Tk):
                 "Daily loss limit status",
                 "Trades taken today",
                 "Max trades per day status",
-            ),
-            start=1,
+            )
         ):
-            ttk.Label(metrics, text=label, style="Panel.TLabel").grid(row=idx, column=0, sticky="w", pady=5)
-            value = ttk.Label(metrics, text="-", style="Panel.TLabel", font=("Helvetica Neue", 12, "bold"))
-            value.grid(row=idx, column=1, sticky="e", pady=5)
+            tk.Label(secondary, text=label, bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 10)).grid(
+                row=idx, column=0, sticky="w", pady=3
+            )
+            value = tk.Label(secondary, text="-", bg="#ffffff", fg=self.colors["text"], font=("Helvetica Neue", 11, "bold"))
+            value.grid(row=idx, column=1, sticky="e", pady=3)
             self.metric_labels[label] = value
 
         notice = self._panel(self.dashboard_tab)
         notice.grid(row=0, column=1, sticky="nsew")
-        ttk.Label(notice, text="Risk desk", style="Panel.TLabel", font=("Helvetica Neue", 16, "bold")).pack(anchor="w")
-        self.risk_status = tk.Text(notice, height=12, wrap="word", font=("Helvetica Neue", 14), relief="solid", bd=1)
-        self.risk_status.pack(fill="both", expand=True, pady=(10, 0))
+        ttk.Label(notice, text="Risk Desk", style="Panel.TLabel", font=("Helvetica Neue", 17, "bold")).pack(anchor="w")
+        self.risk_status_frame = ttk.Frame(notice, style="Panel.TFrame")
+        self.risk_status_frame.pack(fill="x", pady=(12, 0))
 
     def _build_settings_tab(self) -> None:
         self.settings_tab.columnconfigure(0, weight=1)
         self.settings_tab.columnconfigure(1, weight=1)
         trading = self._panel(self.settings_tab)
         trading.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        trading.columnconfigure(0, weight=1)
         trading.columnconfigure(1, weight=1)
-        ttk.Label(trading, text="Trade defaults", style="Panel.TLabel", font=("Helvetica Neue", 16, "bold")).grid(
-            row=0, column=0, columnspan=2, sticky="w", pady=(0, 8)
+        ttk.Label(trading, text="Settings", style="Panel.TLabel", font=("Helvetica Neue", 17, "bold")).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 10)
         )
-        setting_rows = [
-            ("Default risk", "default_risk"),
-            ("Hard max risk", "hard_max_risk"),
-            ("Default buffer %", "default_buffer"),
-            ("Max daily loss", "daily_loss_limit"),
-            ("Max trades per day", "max_trades_per_day"),
-            ("Default exposure limit", "default_exposure_limit"),
-        ]
-        for row, (label, key) in enumerate(setting_rows, start=1):
-            self._settings_entry(trading, row, label, key)
-        ttk.Label(trading, text="Default FX rates to GBP", style="Panel.TLabel", font=("Helvetica Neue", 13, "bold")).grid(
-            row=8, column=0, columnspan=2, sticky="w", pady=(16, 6)
-        )
-        for offset, currency in enumerate(FX_CURRENCIES, start=9):
-            self._settings_entry(trading, offset, currency, f"fx_{currency}")
+        risk_card = self._settings_card(trading, "Risk defaults")
+        risk_card.grid(row=1, column=0, sticky="nsew", padx=(0, 6), pady=6)
+        self._settings_entry(risk_card, 1, "Default risk", "default_risk")
+        self._settings_entry(risk_card, 2, "Hard max risk", "hard_max_risk")
+        self._settings_entry(risk_card, 3, "Default buffer %", "default_buffer")
+
+        exposure_card = self._settings_card(trading, "Exposure limits")
+        exposure_card.grid(row=1, column=1, sticky="nsew", padx=(6, 0), pady=6)
+        self._settings_entry(exposure_card, 1, "Default exposure limit", "default_exposure_limit")
+
+        daily_card = self._settings_card(trading, "Daily rules")
+        daily_card.grid(row=2, column=0, sticky="nsew", padx=(0, 6), pady=6)
+        self._settings_entry(daily_card, 1, "Max daily loss", "daily_loss_limit")
+        self._settings_entry(daily_card, 2, "Max trades per day", "max_trades_per_day")
+
+        fx_card = self._settings_card(trading, "FX defaults")
+        fx_card.grid(row=2, column=1, sticky="nsew", padx=(6, 0), pady=6)
+        for offset, currency in enumerate(FX_CURRENCIES, start=1):
+            self._settings_entry(fx_card, offset, currency, f"fx_{currency}")
+
+        ui_card = self._settings_card(trading, "UI preferences")
+        ui_card.grid(row=3, column=0, columnspan=2, sticky="ew", pady=6)
+        ttk.Label(ui_card, text="Light workstation layout is enabled by default.", style="Subtle.TLabel").grid(row=1, column=0, columnspan=2, sticky="w")
         ttk.Button(trading, text="Save Settings", style="Accent.TButton", command=self.save_settings).grid(
-            row=17, column=0, columnspan=2, sticky="ew", pady=(16, 0)
+            row=4, column=0, columnspan=2, sticky="ew", pady=(14, 0)
         )
 
         api = self._panel(self.settings_tab)
         api.grid(row=0, column=1, sticky="nsew")
         api.columnconfigure(1, weight=1)
-        ttk.Label(api, text="API keys", style="Panel.TLabel", font=("Helvetica Neue", 16, "bold")).grid(
+        ttk.Label(api, text="API Keys", style="Panel.TLabel", font=("Helvetica Neue", 17, "bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", pady=(0, 8)
         )
         ttk.Label(
@@ -489,6 +617,12 @@ class TradingRiskCockpit(tk.Tk):
         ttk.Entry(parent, textvariable=var).grid(row=row, column=1, sticky="ew", pady=5, padx=(8, 0))
         self.setting_vars[key] = var
 
+    def _settings_card(self, parent: ttk.Frame, title: str) -> ttk.Frame:
+        card = self._panel(parent, padding=12)
+        card.columnconfigure(1, weight=1)
+        ttk.Label(card, text=title, style="Section.TLabel").grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 5))
+        return card
+
     def _toggle_advanced_requested(self) -> None:
         self.advanced_visible.set(not self.advanced_visible.get())
         self._toggle_advanced()
@@ -497,11 +631,11 @@ class TradingRiskCockpit(tk.Tk):
         if self.advanced_visible.get():
             self.advanced_frame.grid(row=11, column=0, columnspan=3, sticky="ew")
             self.checklist_panel.grid()
-            self.advanced_button.configure(text="Hide Advanced fields")
+            self.advanced_button.configure(text="Hide advanced settings")
         else:
             self.advanced_frame.grid_remove()
             self.checklist_panel.grid_remove()
-            self.advanced_button.configure(text="Show Advanced fields")
+            self.advanced_button.configure(text="Show advanced settings")
 
     def _float(self, key: str, default: float = 0.0) -> float:
         raw = str(self.vars[key].get()).replace(",", "").strip()
@@ -533,6 +667,7 @@ class TradingRiskCockpit(tk.Tk):
             max_risk_gbp=self._float("max_risk"),
             support_line=self._float("support", stop or entry),
             buffer_percent=self._buffer_percent(),
+            leverage=self._float("leverage", self._default_leverage()),
             spread_cost=self._float("spread_cost"),
             overnight_fee=self._float("overnight_fee"),
             commission=self._float("commission"),
@@ -548,13 +683,18 @@ class TradingRiskCockpit(tk.Tk):
         self.vars["spread_cost"].set("0")
         self.vars["overnight_fee"].set("0")
         self.vars["commission"].set("0")
+        self.vars["leverage"].set(str(self._default_leverage()))
         self._apply_instrument_profile()
 
     def _apply_instrument_profile(self) -> None:
         instrument = self.vars.get("instrument")
         if not instrument:
             return
-        profile = INSTRUMENT_PROFILES.get(instrument.get().strip().upper())
+        ticker = instrument.get().strip().upper()
+        profile = INSTRUMENT_PROFILES.get(ticker)
+        if not profile and self._looks_like_forex_pair(ticker):
+            quote_currency = ticker[-3:]
+            profile = ("Forex", quote_currency if quote_currency in CURRENCIES else "USD")
         if not profile:
             return
         asset_type, currency = profile
@@ -562,7 +702,35 @@ class TradingRiskCockpit(tk.Tk):
         self.vars["currency"].set(currency)
         fx = "1" if currency == "GBP" else self.db.get_setting(f"fx_{currency}", DEFAULT_SETTINGS.get(f"fx_{currency}", "1"))
         self.vars["fx_rate"].set(fx)
+        self.vars["leverage"].set(str(self._default_leverage(ticker, asset_type)))
         self.last_fx_var.set(f"FX source: saved {currency} default")
+
+    def _looks_like_forex_pair(self, ticker: str) -> bool:
+        majors = {"EUR", "GBP", "USD", "JPY", "CHF", "CAD", "AUD", "NZD"}
+        return len(ticker) == 6 and ticker[:3] in majors and ticker[3:] in majors
+
+    def _default_leverage(self, instrument: str | None = None, asset_type: str | None = None) -> int:
+        ticker = (instrument or self.vars.get("instrument", tk.StringVar(value="")).get()).strip().upper()
+        asset = asset_type or self.vars.get("asset_type", tk.StringVar(value="CFD")).get()
+        if ticker in LEVERAGE_DEFAULTS:
+            return LEVERAGE_DEFAULTS[ticker]
+        if self._looks_like_forex_pair(ticker) or asset == "Forex":
+            return 30
+        if asset == "Index":
+            return 20
+        if asset == "3x ETP":
+            return 1
+        if asset == "Crypto":
+            return 2
+        if ticker == "XAUUSD":
+            return 20
+        if ticker in {"XAGUSD", "OIL", "CRUDE"}:
+            return 10
+        if asset == "Commodity":
+            return 10
+        if asset == "CFD":
+            return 5
+        return 1
 
     def calculate(self) -> None:
         try:
@@ -578,10 +746,14 @@ class TradingRiskCockpit(tk.Tk):
             "stop_loss_percent": f"{result.stop_loss_percent:.2%}",
             "invalidation_stop": f"{result.invalidation_stop_price:.4f}",
             "units": f"{result.units:.4f}",
+            "leverage": f"{result.leverage:g}x",
             "exposure_local": f"{result.exposure_local:,.2f} {values.currency}",
             "exposure_gbp": f"GBP {result.exposure_gbp:,.2f}",
+            "required_margin_local": f"{result.required_margin_local:,.2f} {values.currency}",
+            "required_margin_gbp": f"GBP {result.required_margin_gbp:,.2f}",
             "potential_profit": f"GBP {result.potential_profit_gbp:,.2f}",
             "potential_loss": f"GBP {result.potential_loss_gbp:,.2f}",
+            "pl_basis": "Based on exposure, not margin",
             "net_profit": f"GBP {result.net_expected_profit_gbp:,.2f}",
             "risk_reward": f"{result.risk_reward:.2f}",
             "valid": "Yes" if result.valid else "No",
@@ -592,7 +764,10 @@ class TradingRiskCockpit(tk.Tk):
         self.output_labels["potential_profit"].configure(foreground=self.colors["green"])
         self.output_labels["potential_loss"].configure(foreground=self.colors["red"])
         self.output_labels["net_profit"].configure(foreground=self.colors["green"] if result.net_expected_profit_gbp >= 0 else self.colors["red"])
-        self.output_labels["valid"].configure(foreground=self.colors["green"] if result.valid else self.colors["red"])
+        self.output_labels["valid"].configure(
+            foreground=self.colors["green"] if result.valid else self.colors["red"],
+            background=self.colors["green_bg"] if result.valid else self.colors["red_bg"],
+        )
         self.output_labels["risk_label"].configure(
             foreground=self.colors["green"] if result.risk_label in {"Safe", "Moderate"} else self.colors["orange"]
         )
@@ -608,7 +783,6 @@ class TradingRiskCockpit(tk.Tk):
     def _update_quality_dashboard(self, values: TradeInputs, result) -> list[str]:
         assessments = self._quality_assessments(values, result)
         reasons: list[str] = []
-        status_rank = {"green": 0, "yellow": 1, "red": 2}
         red_count = 0
         yellow_count = 0
 
@@ -618,7 +792,7 @@ class TradingRiskCockpit(tk.Tk):
             status = assessment["status"]
             red_count += status == "red"
             yellow_count += status == "yellow"
-            self._set_quality_card(label, assessment["value"], status)
+            self._set_quality_card(label, assessment["value"], status, assessment["target"], assessment["gap"])
             reasons.extend(assessment["reasons"])
 
         if not result.valid or self._daily_loss_hit() or self._max_trades_hit():
@@ -646,7 +820,7 @@ class TradingRiskCockpit(tk.Tk):
             invalid_reasons.append("Max trades reached")
         reasons = invalid_reasons + [reason for reason in reasons if reason not in invalid_reasons]
 
-        self._set_quality_card("Overall verdict", verdict, verdict_status)
+        self._set_quality_card("Overall verdict", verdict, verdict_status, "Target: Ideal / Acceptable", "")
         self._write_improvements(reasons or ["No obvious issues."])
         return reasons
 
@@ -659,10 +833,13 @@ class TradingRiskCockpit(tk.Tk):
 
         rr_status = "green" if result.risk_reward >= 2 else "yellow" if result.risk_reward >= 1.5 else "red"
         rr_reasons = [] if rr_status == "green" else ["Risk:Reward too low"]
+        rr_gap = "" if result.risk_reward >= 2 else f"Need R:R +{2 - result.risk_reward:.2f}"
 
-        stop_status, stop_reason = self._stop_loss_status(values, stop_loss_pct)
+        stop_status, stop_reason, stop_target, stop_gap = self._stop_loss_status(values, stop_loss_pct)
         distance_status = "green" if 0 <= entry_distance <= 1 else "yellow" if entry_distance <= 2 else "red"
         distance_reasons = [] if distance_status == "green" else ["Entry too far from support"]
+        distance_target = "Target: 0%-1% from resistance" if values.direction == "Short" else "Target: 0%-1% from support"
+        distance_gap = "" if entry_distance <= 1 else f"Entry {entry_distance - 1:.2f}% too far"
 
         if values.max_risk_gbp <= default_risk:
             risk_status = "green"
@@ -671,6 +848,7 @@ class TradingRiskCockpit(tk.Tk):
         else:
             risk_status = "red"
         risk_reasons = [] if risk_status == "green" else ["Position too large"]
+        risk_gap = "" if values.max_risk_gbp <= default_risk else f"Risk GBP {values.max_risk_gbp - default_risk:.2f} over"
 
         if result.exposure_gbp <= exposure_limit:
             exposure_status = "green"
@@ -679,34 +857,53 @@ class TradingRiskCockpit(tk.Tk):
         else:
             exposure_status = "red"
         exposure_reasons = [] if exposure_status == "green" else ["Position too large"]
+        exposure_gap = "" if result.exposure_gbp <= exposure_limit else f"Exposure GBP {result.exposure_gbp - exposure_limit:,.0f} over"
+        margin_status = exposure_status
 
         return {
             "Risk:Reward": {
                 "value": f"{result.risk_reward:.2f}",
                 "status": rr_status,
+                "target": "Target: 2.0+ ideal",
+                "gap": rr_gap,
                 "reasons": rr_reasons,
             },
             "Stop-loss %": {
                 "value": f"{stop_loss_pct:.2f}%",
                 "status": stop_status,
+                "target": stop_target,
+                "gap": stop_gap,
                 "reasons": [stop_reason] if stop_reason else [],
             },
             "Entry distance": {
                 "value": f"{entry_distance:.2f}%",
                 "status": distance_status,
+                "target": distance_target,
+                "gap": distance_gap,
                 "reasons": distance_reasons,
             },
             "Risk size": {
                 "value": f"GBP {values.max_risk_gbp:.2f}",
                 "status": risk_status,
+                "target": f"Target: <= GBP {default_risk:g}",
+                "gap": risk_gap,
                 "reasons": risk_reasons,
             },
             "Exposure size": {
-                "value": f"GBP {result.exposure_gbp:,.0f}",
+                "value": f"Exposure: GBP {result.exposure_gbp:,.0f} | Margin: GBP {result.required_margin_gbp:,.0f} | {result.leverage:g}x",
                 "status": exposure_status,
+                "target": f"Target: <= GBP {exposure_limit:g}",
+                "gap": exposure_gap,
                 "reasons": exposure_reasons,
             },
-            "Overall verdict": {"value": "-", "status": "yellow", "reasons": []},
+            "Margin required": {
+                "value": f"GBP {result.required_margin_gbp:,.2f}",
+                "status": margin_status,
+                "target": "Based on leverage used",
+                "gap": f"Leverage: {result.leverage:g}x",
+                "reasons": [],
+            },
+            "Overall verdict": {"value": "-", "status": "yellow", "target": "Target: Ideal / Acceptable", "gap": "", "reasons": []},
         }
 
     def _entry_distance_percent(self, values: TradeInputs) -> float:
@@ -716,15 +913,18 @@ class TradingRiskCockpit(tk.Tk):
             return max(0.0, (values.support_line - values.entry_price) / values.support_line * 100)
         return max(0.0, (values.entry_price - values.support_line) / values.support_line * 100)
 
-    def _stop_loss_status(self, values: TradeInputs, stop_loss_pct: float) -> tuple[str, str]:
+    def _stop_loss_status(self, values: TradeInputs, stop_loss_pct: float) -> tuple[str, str, str, str]:
         green, yellow = self._stop_loss_ranges(values)
+        target = self._stop_loss_target_text(values)
         if green[0] <= stop_loss_pct <= green[1]:
-            return "green", ""
+            return "green", "", target, ""
         if yellow[0] <= stop_loss_pct <= yellow[1]:
             reason = "Stop too tight" if stop_loss_pct < green[0] else "Stop too wide"
-            return "yellow", reason
+            gap = self._stop_gap_text(reason, stop_loss_pct, green)
+            return "yellow", reason, target, gap
         reason = "Stop too tight" if stop_loss_pct < yellow[0] else "Stop too wide"
-        return "red", reason
+        gap = self._stop_gap_text(reason, stop_loss_pct, green)
+        return "red", reason, target, gap
 
     def _stop_loss_ranges(self, values: TradeInputs) -> tuple[tuple[float, float], tuple[float, float]]:
         instrument = values.instrument.upper()
@@ -735,7 +935,7 @@ class TradingRiskCockpit(tk.Tk):
             return (2.0, 6.0), (1.5, 8.0)
         if instrument in {"XAUUSD", "XAGUSD"}:
             return (0.5, 2.0), (0.3, 3.0)
-        if instrument == "OIL":
+        if instrument in {"OIL", "CRUDE"}:
             return (0.8, 3.0), (0.5, 4.0)
         if asset_type == "Forex":
             return (0.2, 0.8), (0.1, 1.2)
@@ -743,33 +943,68 @@ class TradingRiskCockpit(tk.Tk):
             return (2.0, 6.0), (1.0, 10.0)
         return (0.8, 2.5), (0.5, 3.5)
 
-    def _set_quality_card(self, label: str, value: str, status: str) -> None:
+    def _stop_loss_target_text(self, values: TradeInputs) -> str:
+        instrument = values.instrument.upper()
+        asset_type = values.asset_type
+        if asset_type == "Index":
+            return "Target: 0.3%-1.2%"
+        if asset_type == "3x ETP":
+            return "Target: 2%-6%"
+        if instrument in {"XAUUSD", "XAGUSD"}:
+            return "Target: 0.5%-2%"
+        if instrument in {"OIL", "CRUDE"}:
+            return "Target: 0.8%-3%"
+        if asset_type == "Forex":
+            return "Target: 0.2%-0.8%"
+        if asset_type == "Crypto":
+            return "Target: 2%-6%"
+        return "Target: 0.8%-2.5%"
+
+    def _stop_gap_text(self, reason: str, stop_loss_pct: float, green: tuple[float, float]) -> str:
+        if reason == "Stop too tight":
+            return f"Stop too tight by {green[0] - stop_loss_pct:.2f}%"
+        return f"Stop too wide by {stop_loss_pct - green[1]:.2f}%"
+
+    def _set_quality_card(self, label: str, value: str, status: str, target_text: str = "", gap_text: str = "") -> None:
         colors = {
-            "green": (self.colors["green_bg"], self.colors["green"]),
-            "yellow": (self.colors["yellow_bg"], self.colors["yellow"]),
-            "red": (self.colors["red_bg"], self.colors["red"]),
+            "green": (self.colors["green_bg"], self.colors["green"], "GOOD"),
+            "yellow": (self.colors["yellow_bg"], self.colors["yellow"], "WATCH"),
+            "red": (self.colors["red_bg"], self.colors["red"], "BAD"),
         }
-        bg, fg = colors[status]
+        badge_bg, fg, badge_text = colors[status]
         card = self.quality_cards[label]
         frame = card["frame"]
         title = card["title"]
+        badge = card["badge"]
         value_label = card["value"]
+        target_label = card["target"]
+        gap_label = card["gap"]
         assert isinstance(frame, tk.Frame)
         assert isinstance(title, tk.Label)
+        assert isinstance(badge, tk.Label)
         assert isinstance(value_label, tk.Label)
-        frame.configure(bg=bg)
-        title.configure(bg=bg, fg=fg)
-        value_label.configure(text=value, bg=bg, fg=fg)
+        assert isinstance(target_label, tk.Label)
+        assert isinstance(gap_label, tk.Label)
+        frame.configure(bg="#ffffff", highlightbackground=fg if status == "red" else self.colors["border"])
+        for child in frame.winfo_children():
+            if isinstance(child, tk.Frame):
+                child.configure(bg="#ffffff")
+        title.configure(bg="#ffffff", fg=self.colors["muted"])
+        badge.configure(text=badge_text, bg=badge_bg, fg=fg)
+        value_label.configure(text=value, bg="#ffffff", fg=self.colors["text"] if status != "red" else fg)
+        target_label.configure(text=target_text, bg="#ffffff", fg=self.colors["muted"])
+        gap_label.configure(text=gap_text, bg="#ffffff", fg=fg if gap_text else self.colors["muted"])
 
     def _write_improvements(self, reasons: list[str]) -> None:
         cleaned: list[str] = []
         for reason in reasons:
             if reason and reason not in cleaned:
                 cleaned.append(reason)
-        self.improve_text.configure(state="normal")
-        self.improve_text.delete("1.0", "end")
-        self.improve_text.insert("1.0", "\n".join(cleaned[:8]))
-        self.improve_text.configure(state="disabled")
+        for child in self.improve_frame.winfo_children():
+            child.destroy()
+        for idx, reason in enumerate(cleaned[:6]):
+            label = ttk.Label(self.improve_frame, text=f"- {reason}", style="Subtle.TLabel")
+            label.grid(row=idx, column=0, sticky="w", pady=1)
 
     def refresh_price(self) -> None:
         instrument = self.vars["instrument"].get().strip().upper()
@@ -797,10 +1032,14 @@ class TradingRiskCockpit(tk.Tk):
         self.last_fx_var.set(f"FX source: {quote.source}{delay} at {quote.timestamp}")
 
     def _write_warnings(self, messages: list[str]) -> None:
-        self.warning_text.configure(state="normal")
-        self.warning_text.delete("1.0", "end")
-        self.warning_text.insert("1.0", "\n".join(messages) if messages else "No warnings.")
-        self.warning_text.configure(state="disabled")
+        for child in self.warning_frame.winfo_children():
+            child.destroy()
+        shown = messages if messages else ["No warnings."]
+        for idx, message in enumerate(shown[:7]):
+            color = self.colors["red"] if "invalid" in message.lower() or "must" in message.lower() else self.colors["orange"]
+            ttk.Label(self.warning_frame, text=f"- {message}", style="Subtle.TLabel", foreground=color).grid(
+                row=idx, column=0, sticky="w", pady=1
+            )
 
     def _sync_checklist_from_result(self, result) -> None:
         auto = [
@@ -889,7 +1128,7 @@ class TradingRiskCockpit(tk.Tk):
         self.current_result = None
         self._apply_quick_defaults()
         for label in self.output_labels.values():
-            label.configure(text="-", foreground=self.colors["text"])
+            label.configure(text="-", foreground=self.colors["text"], background="#ffffff")
         self._write_warnings(["No calculator = no trade."])
         for label in self.quality_cards:
             self._set_quality_card(label, "-", "yellow")
@@ -913,7 +1152,9 @@ class TradingRiskCockpit(tk.Tk):
             self.tree.delete(item)
         for row in self.db.all_trades():
             values = [row[column] for column in TRADE_COLUMNS]
-            self.tree.insert("", "end", iid=str(row["id"]), values=values)
+            result = float(row["result_gbp"] or 0)
+            tag = "win" if result > 0 else "loss" if result < 0 else ""
+            self.tree.insert("", "end", iid=str(row["id"]), values=values, tags=(tag,) if tag else ())
 
     def _on_trade_select(self, _event=None) -> None:
         selection = self.tree.selection()
@@ -1019,6 +1260,8 @@ class TradingRiskCockpit(tk.Tk):
         avg_r = sum(float(row["r_multiple"] or 0) for row in rows) / total if total else 0
         today = self.db.trades_today(dt.date.today().isoformat())
         daily_pl = sum(float(row["result_gbp"] or 0) for row in today)
+        best_trade = max(results) if results else 0
+        worst_trade = min(results) if results else 0
 
         def grouped_best(field: str) -> tuple[str, str]:
             totals: dict[str, float] = {}
@@ -1048,6 +1291,8 @@ class TradingRiskCockpit(tk.Tk):
             "Win rate %": f"{win_rate:.1f}%",
             "Average win": f"GBP {avg_win:,.2f}",
             "Average loss": f"GBP {avg_loss:,.2f}",
+            "Best trade": f"GBP {best_trade:,.2f}",
+            "Worst trade": f"GBP {worst_trade:,.2f}",
             "Profit factor": f"{profit_factor:.2f}",
             "Average R multiple": f"{avg_r:.2f}",
             "Best instrument": best_instrument,
@@ -1063,11 +1308,15 @@ class TradingRiskCockpit(tk.Tk):
             label = self.metric_labels[key]
             label.configure(text=value)
             if key in {"Total P/L", "Daily P/L"}:
-                label.configure(foreground=self.colors["green"] if not value.startswith("GBP -") else self.colors["red"])
+                label.configure(fg=self.colors["green"] if not value.startswith("GBP -") else self.colors["red"])
+            elif key in {"Best trade", "Average win"}:
+                label.configure(fg=self.colors["green"])
+            elif key in {"Worst trade", "Average loss"}:
+                label.configure(fg=self.colors["red"] if value != "GBP 0.00" else self.colors["text"])
             elif "stop trading" in value:
-                label.configure(foreground=self.colors["red"])
+                label.configure(fg=self.colors["red"])
             else:
-                label.configure(foreground=self.colors["text"])
+                label.configure(fg=self.colors["text"])
 
         status_lines = ["No calculator = no trade."]
         if self._daily_loss_hit():
@@ -1076,10 +1325,13 @@ class TradingRiskCockpit(tk.Tk):
             status_lines.append("Max trades reached - stop trading.")
         if len(status_lines) == 1:
             status_lines.append("Risk controls are currently within limits.")
-        self.risk_status.configure(state="normal")
-        self.risk_status.delete("1.0", "end")
-        self.risk_status.insert("1.0", "\n".join(status_lines))
-        self.risk_status.configure(state="disabled")
+        for child in self.risk_status_frame.winfo_children():
+            child.destroy()
+        for idx, line in enumerate(status_lines):
+            color = self.colors["red"] if "stop trading" in line else self.colors["muted"]
+            ttk.Label(self.risk_status_frame, text=f"- {line}", style="Subtle.TLabel", foreground=color).grid(
+                row=idx, column=0, sticky="w", pady=3
+            )
 
     def save_settings(self) -> None:
         for key, var in self.setting_vars.items():
