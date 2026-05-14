@@ -1,6 +1,6 @@
 # Trading Risk Cockpit
 
-Trading Risk Cockpit is a local Python 3 desktop app for fast pre-trade sizing, risk checks, journaling, and simple performance review. It uses `tkinter` for the GUI, SQLite for storage, optional `yfinance` market data, and CSV export for external analysis.
+Trading Risk Cockpit is a local Python 3 desktop app for fast pre-trade sizing, risk checks, journaling, and simple performance review. It uses CustomTkinter for the modern desktop UI, SQLite for storage, optional Twelve Data / yfinance market data, and CSV export for external analysis.
 
 ## Run on macOS
 
@@ -11,11 +11,11 @@ pip install -r requirements.txt
 python main.py
 ```
 
-`tkinter` ships with the standard Python installers on macOS. The app stores its journal in `trading_risk_cockpit.sqlite3` in the project folder.
+The app stores its journal in `trading_risk_cockpit.sqlite3` in the project folder.
 
 ## Quick Trade Mode
 
-The Calculator tab opens in Quick Trade Mode. To calculate a trade, enter only:
+The Calculator tab opens as a trader workstation with a left input panel, center trade quality panel, right summary panel, and bottom notes/rules/recent-activity strip. To calculate a trade, enter only:
 
 - Instrument
 - Direction
@@ -33,6 +33,26 @@ The app auto-fills the rest from instrument profiles and saved settings:
 - Quick max-risk buttons: `£3`, `£5`, `£10`, `£20`, `£50`
 
 Use **Show Advanced fields** to edit FX rate, asset type, leverage, support/resistance, buffer, costs, notes, checklist, and screenshot path.
+
+## Instrument Autocomplete
+
+The app preloads a local `data/instruments.json` catalog so suggestions appear instantly as you type. Search works by ticker, company/fund name, asset type, category, broker symbol, or API symbol.
+
+Seeded examples include:
+
+- Stocks/CFDs: `TSLA`, `NVDA`, `AMD`, `MSFT`, `AAPL`, `AMZN`, `GOOGL`, `META`, `PLTR`, `INTC`, `ASML`
+- ETFs/ETPs: `VUAG`, `VUSA`, `QQQ`, `SPY`, `TQQQ`
+- CFDs/indices/commodities/forex: `TECH100`, `NDX`, `USA500`, `GER40`, `UK100`, `XAUUSD`, `XAGUSD`, `CRUDE`, `EURUSD`, `GBPUSD`, `USDJPY`
+
+Selecting a suggestion fills ticker, asset class, currency, leverage profile, and FX defaults, then can refresh price and FX data without blocking manual entry.
+
+## Code Layout
+
+- `main.py`: CustomTkinter app shell and workflow wiring
+- `ui/`: theme, reusable components, modal dialogs, layout constants
+- `data/`: local instrument catalog, catalog loader, market-data compatibility wrapper
+- `logic/`: calculator compatibility wrapper, validation helpers, trade-quality recommendations
+- `calculator.py`, `database.py`, `market_data.py`: core calculation, SQLite persistence, and market data providers
 
 ## Instrument Profiles
 
