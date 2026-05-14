@@ -1,1 +1,1 @@
-# Trading Risk Cockpit uses only Python standard library modules.
+yfinance>=0.2.50

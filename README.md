@@ -1,6 +1,6 @@
 # Trading Risk Cockpit
 
-Trading Risk Cockpit is a local Python 3 desktop app for pre-trade sizing, risk checks, journaling, and simple performance review. It uses `tkinter` for the GUI, SQLite for storage, and CSV export for external analysis.
+Trading Risk Cockpit is a local Python 3 desktop app for fast pre-trade sizing, risk checks, journaling, and simple performance review. It uses `tkinter` for the GUI, SQLite for storage, optional `yfinance` market data, and CSV export for external analysis.
 
 ## Run on macOS
 
@@ -12,6 +12,87 @@ python main.py
 ```
 
 `tkinter` ships with the standard Python installers on macOS. The app stores its journal in `trading_risk_cockpit.sqlite3` in the project folder.
+
+## Quick Trade Mode
+
+The Calculator tab opens in Quick Trade Mode. To calculate a trade, enter only:
+
+- Instrument
+- Direction
+- Entry price
+- Stop price
+- Take profit price
+- Max GBP risk
+
+The app auto-fills the rest from instrument profiles and saved settings:
+
+- Asset type and currency from the instrument profile
+- FX rate from Settings
+- Buffer default from Settings, initially `0.8%`
+- Spread, overnight fee, and commission default to `0`
+- Quick max-risk buttons: `£3`, `£5`, `£10`, `£20`, `£50`
+
+Use **Show Advanced fields** to edit FX rate, asset type, support/resistance, buffer, costs, notes, checklist, and screenshot path.
+
+## Instrument Profiles
+
+- `TSLA`, `NVDA`, `AMD`, `MSFT`, `PLTR`: USD stock/CFD profile
+- `TECH100`, `USA500`: USD index
+- `NDX`, `SPX`: USD index aliases
+- `GER40`: EUR index
+- `UK100`: GBP index
+- `XAGUSD`, `XAUUSD`, `OIL`: USD commodity
+- `BTCUSD`, `ETHUSD`: USD crypto
+
+## Trade Quality Dashboard
+
+The top-right calculator panel shows compact status cards for:
+
+- Risk:Reward
+- Stop-loss %
+- Entry distance from support/resistance
+- Risk size
+- Exposure size
+- Overall verdict
+
+Cards use green for good, yellow for caution, and red for bad. The verdict is `Ideal`, `Acceptable`, `Borderline`, or `Avoid`. The "What must improve?" box gives concise reasons such as low Risk:Reward, entry too far from support, stop too tight or wide, oversized position, invalid trade, daily loss limit hit, or max trades reached.
+
+## Settings
+
+The Settings tab lets you edit:
+
+- Default FX rates to GBP for USD, EUR, CHF, JPY, CAD, AUD, and NZD
+- Default risk
+- Hard max risk
+- Default buffer
+- Max daily loss
+- Max trades per day
+- Default exposure limit
+- API keys for optional read-only market data integrations
+
+API keys are saved locally in `.env`, which is ignored by Git.
+
+## Optional Live Data
+
+The app includes `market_data.py` with a provider interface and a free/simple `yfinance` fallback where possible. It can fetch latest available FX rates and prices for common instruments, then fill Entry Price or FX Rate.
+
+Supported refresh targets include:
+
+- FX: `USDGBP`, `EURGBP`, `CHFGBP`, `JPYGBP`, `CADGBP`, `AUDGBP`, `NZDGBP`
+- Prices: `TSLA`, `NVDA`, `AMD`, `MSFT`, `PLTR`, `TECH100` / `NDX`, `USA500` / `SPX`, `GER40`, `UK100`, `XAGUSD`, `XAUUSD`, `OIL`
+
+Buttons:
+
+- **Refresh price** fills Entry Price and shows timestamp/source.
+- **Refresh FX** fills FX rate to GBP and shows timestamp/source.
+
+If data fails, manual entry remains available. `Trading212Provider`, `IGProvider`, and `IBKRProvider` placeholders are included for future read-only integration. They do not place orders.
+
+Safety notes:
+
+- The app never auto-submits trades.
+- Do not store API keys in GitHub.
+- Free market data can be delayed. The app warns when `yfinance` data is used.
 
 ## Core Formulas
 
