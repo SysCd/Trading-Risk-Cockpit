@@ -43,6 +43,7 @@ INSTRUMENT_PROFILES = {
     "AMD": ("CFD", "USD"),
     "MSFT": ("CFD", "USD"),
     "PLTR": ("CFD", "USD"),
+    "ASML": ("CFD", "USD"),
     "TECH100": ("Index", "USD"),
     "NDX": ("Index", "USD"),
     "USA500": ("Index", "USD"),
@@ -66,6 +67,7 @@ LEVERAGE_DEFAULTS = {
     "AMD": 5,
     "MSFT": 5,
     "PLTR": 5,
+    "ASML": 5,
     "TECH100": 20,
     "NDX": 20,
     "USA500": 20,
@@ -137,9 +139,9 @@ class TradingRiskCockpit(tk.Tk):
         style.theme_use("clam")
         bg = "#f8fafc"
         panel = "#ffffff"
-        text = "#1f2937"
-        accent = "#2563eb"
-        border = "#e2e8f0"
+        text = "#172033"
+        accent = "#2f6fed"
+        border = "#dbe4ef"
         self.configure(bg=bg)
         style.configure(".", background=bg, foreground=text, font=("Helvetica Neue", 12))
         style.configure("TFrame", background=bg)
@@ -152,28 +154,36 @@ class TradingRiskCockpit(tk.Tk):
         style.configure("Section.TLabel", background=panel, foreground=text, font=("Helvetica Neue", 13, "bold"))
         style.configure("Rule.TLabel", font=("Helvetica Neue", 11, "bold"), background=panel, foreground="#334155")
         style.configure("TButton", padding=(12, 7), font=("Helvetica Neue", 11), borderwidth=0)
-        style.configure("Accent.TButton", background=accent, foreground="#ffffff", borderwidth=0)
-        style.configure("Secondary.TButton", background="#eef2f7", foreground=text, borderwidth=0)
-        style.configure("Risk.TButton", padding=(9, 5), font=("Helvetica Neue", 11, "bold"), background="#eef2f7")
-        style.configure("TEntry", padding=(8, 7), fieldbackground="#ffffff", bordercolor=border, lightcolor=border, darkcolor=border)
-        style.configure("TCombobox", padding=(8, 7), fieldbackground="#ffffff", bordercolor=border, lightcolor=border, darkcolor=border)
+        style.configure("Accent.TButton", background=accent, foreground="#ffffff", borderwidth=0, focusthickness=1, focuscolor="#bfdbfe")
+        style.map("Accent.TButton", background=[("active", "#255ec8")])
+        style.configure("Secondary.TButton", background="#f1f5fb", foreground=text, borderwidth=0, focusthickness=1, focuscolor="#dbeafe")
+        style.map("Secondary.TButton", background=[("active", "#e5edf7")])
+        style.configure("Risk.TButton", padding=(9, 5), font=("Helvetica Neue", 11, "bold"), background="#f1f5fb")
+        style.configure("TEntry", padding=(10, 8), fieldbackground="#ffffff", bordercolor=border, lightcolor=border, darkcolor=border)
+        style.map("TEntry", bordercolor=[("focus", accent)], lightcolor=[("focus", accent)], darkcolor=[("focus", accent)])
+        style.configure("TCombobox", padding=(10, 8), fieldbackground="#ffffff", bordercolor=border, lightcolor=border, darkcolor=border)
+        style.map("TCombobox", bordercolor=[("focus", accent)])
         style.configure("Treeview", rowheight=31, font=("Helvetica Neue", 11), background="#ffffff", fieldbackground="#ffffff", borderwidth=0)
         style.configure("Treeview.Heading", font=("Helvetica Neue", 11, "bold"))
         style.configure("TNotebook", background=bg, borderwidth=0)
-        style.configure("TNotebook.Tab", padding=(18, 9), font=("Helvetica Neue", 12, "bold"), background="#eef2f7")
+        style.configure("TNotebook.Tab", padding=(20, 10), font=("Helvetica Neue", 12, "bold"), background="#edf3fb", borderwidth=0)
+        style.map("TNotebook.Tab", background=[("selected", "#ffffff"), ("active", "#f6f9fd")], foreground=[("selected", accent)])
         self.colors = {
-            "green": "#047857",
-            "green_bg": "#dcfce7",
-            "red": "#b91c1c",
-            "red_bg": "#fee2e2",
-            "yellow": "#a16207",
-            "yellow_bg": "#fef3c7",
-            "orange": "#b45309",
-            "muted": "#64748b",
+            "green": "#16875a",
+            "green_bg": "#e4f7ed",
+            "red": "#c2413a",
+            "red_bg": "#fdebea",
+            "yellow": "#b7791f",
+            "yellow_bg": "#fff4d6",
+            "orange": "#c76a14",
+            "muted": "#66758a",
             "text": text,
             "panel": panel,
             "border": border,
             "bg": bg,
+            "shadow": "#e9eff7",
+            "glass": "#fbfdff",
+            "accent": accent,
         }
 
     def _build_ui(self) -> None:
@@ -203,15 +213,23 @@ class TradingRiskCockpit(tk.Tk):
         return frame
 
     def _card(self, parent: tk.Widget, padding: int = 16) -> tk.Frame:
-        return tk.Frame(
-            parent,
-            bg=self.colors["panel"],
+        shell = tk.Frame(parent, bg=self.colors["shadow"], padx=1, pady=1)
+        card = tk.Frame(
+            shell,
+            bg=self.colors["glass"],
             highlightbackground=self.colors["border"],
             highlightthickness=1,
             bd=0,
             padx=padding,
             pady=padding,
         )
+        card.pack(fill="both", expand=True)
+        card._shadow_shell = shell  # type: ignore[attr-defined]
+        return card
+
+    def _grid_card(self, card: tk.Frame, **grid_options) -> None:
+        shell = getattr(card, "_shadow_shell", card)
+        shell.grid(**grid_options)
 
     def _build_calculator_tab(self) -> None:
         self.calculator_tab.columnconfigure(0, weight=2, uniform="cockpit")
@@ -264,6 +282,7 @@ class TradingRiskCockpit(tk.Tk):
             text="Quick mode keeps the six decisions that matter. Profiles fill the rest.",
             style="Panel.TLabel",
             foreground=self.colors["muted"],
+            wraplength=420,
         ).grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 8))
 
         self._add_entry(parent, 2, "Instrument / ticker", "instrument", "AMD")
@@ -283,7 +302,7 @@ class TradingRiskCockpit(tk.Tk):
                 side="left", padx=(0, 6)
             )
 
-        ttk.Label(parent, textvariable=self.last_price_var, style="Panel.TLabel", foreground=self.colors["muted"]).grid(
+        ttk.Label(parent, textvariable=self.last_price_var, style="Panel.TLabel", foreground=self.colors["muted"], wraplength=420).grid(
             row=9, column=0, columnspan=3, sticky="w", pady=(0, 6)
         )
 
@@ -297,7 +316,7 @@ class TradingRiskCockpit(tk.Tk):
         self._add_entry(self.advanced_frame, 2, "Leverage", "leverage", "5")
         self._add_entry(self.advanced_frame, 3, "FX rate to GBP", "fx_rate", DEFAULT_SETTINGS["fx_USD"])
         ttk.Button(self.advanced_frame, text="Refresh FX", command=self.refresh_fx).grid(row=3, column=2, sticky="ew", padx=(8, 0), pady=4)
-        ttk.Label(self.advanced_frame, textvariable=self.last_fx_var, style="Panel.TLabel", foreground=self.colors["muted"]).grid(
+        ttk.Label(self.advanced_frame, textvariable=self.last_fx_var, style="Panel.TLabel", foreground=self.colors["muted"], wraplength=420).grid(
             row=4, column=0, columnspan=3, sticky="w", pady=(0, 6)
         )
         self._add_entry(self.advanced_frame, 5, "Support / resistance line", "support", "")
@@ -347,19 +366,19 @@ class TradingRiskCockpit(tk.Tk):
             "Overall verdict",
         )
         for idx, label in enumerate(labels):
-            frame = tk.Frame(parent, bg="#ffffff", highlightbackground=self.colors["border"], highlightthickness=1, padx=12, pady=10)
-            frame.grid(row=1 + idx // 2, column=idx % 2, sticky="ew", padx=4, pady=4)
-            top = tk.Frame(frame, bg="#ffffff")
+            frame = tk.Frame(parent, bg=self.colors["glass"], highlightbackground=self.colors["border"], highlightthickness=1, padx=14, pady=12)
+            frame.grid(row=1 + idx // 2, column=idx % 2, sticky="ew", padx=7, pady=7)
+            top = tk.Frame(frame, bg=self.colors["glass"])
             top.pack(fill="x")
-            title = tk.Label(top, text=label, bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 10, "bold"))
+            title = tk.Label(top, text=label, bg=self.colors["glass"], fg=self.colors["muted"], font=("Helvetica Neue", 10, "bold"), wraplength=130, justify="left")
             title.pack(side="left", anchor="w")
             badge = tk.Label(top, text="-", bg="#e2e8f0", fg=self.colors["muted"], font=("Helvetica Neue", 8, "bold"), padx=6, pady=1)
             badge.pack(side="right")
-            value = tk.Label(frame, text="-", bg="#ffffff", fg=self.colors["text"], font=("Helvetica Neue", 14, "bold"), justify="left")
-            value.pack(anchor="w")
-            target = tk.Label(frame, text="", bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 9), justify="left")
-            target.pack(anchor="w")
-            gap = tk.Label(frame, text="", bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 9), justify="left")
+            value = tk.Label(frame, text="-", bg=self.colors["glass"], fg=self.colors["text"], font=("Helvetica Neue", 13, "bold"), justify="left", wraplength=210)
+            value.pack(anchor="w", pady=(5, 1), fill="x")
+            target = tk.Label(frame, text="", bg=self.colors["glass"], fg=self.colors["muted"], font=("Helvetica Neue", 9), justify="left", wraplength=210)
+            target.pack(anchor="w", fill="x")
+            gap = tk.Label(frame, text="", bg=self.colors["glass"], fg=self.colors["muted"], font=("Helvetica Neue", 9), justify="left", wraplength=210)
             gap.pack(anchor="w")
             self.quality_cards[label] = {"frame": frame, "title": title, "badge": badge, "value": value, "target": target, "gap": gap}
 
@@ -409,7 +428,7 @@ class TradingRiskCockpit(tk.Tk):
         row = 1
         for title, items in sections:
             card = self._summary_section(parent, title, items)
-            card.grid(row=row, column=0, sticky="ew", pady=(0, 10))
+            self._grid_card(card, row=row, column=0, sticky="ew", pady=(0, 14))
             row += 1
         ttk.Label(parent, text="Warnings", style="Section.TLabel").grid(row=row, column=0, sticky="w", pady=(2, 4))
         self.warning_frame = ttk.Frame(parent, style="Panel.TFrame")
@@ -418,14 +437,14 @@ class TradingRiskCockpit(tk.Tk):
     def _summary_section(self, parent: ttk.Frame, title: str, items: list[tuple[str, str]]) -> tk.Frame:
         card = self._card(parent, padding=12)
         card.columnconfigure(1, weight=1)
-        tk.Label(card, text=title, bg="#ffffff", fg=self.colors["text"], font=("Helvetica Neue", 12, "bold")).grid(
+        tk.Label(card, text=title, bg=self.colors["glass"], fg=self.colors["text"], font=("Helvetica Neue", 12, "bold")).grid(
             row=0, column=0, columnspan=2, sticky="w", pady=(0, 6)
         )
         for idx, (label, key) in enumerate(items, start=1):
-            tk.Label(card, text=label, bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 10)).grid(
+            tk.Label(card, text=label, bg=self.colors["glass"], fg=self.colors["muted"], font=("Helvetica Neue", 10), wraplength=170, justify="left").grid(
                 row=idx, column=0, sticky="w", pady=3
             )
-            value = tk.Label(card, text="-", bg="#ffffff", fg=self.colors["text"], font=("Helvetica Neue", 12, "bold"), justify="right")
+            value = tk.Label(card, text="-", bg=self.colors["glass"], fg=self.colors["text"], font=("Helvetica Neue", 12, "bold"), justify="right", wraplength=220)
             value.grid(row=idx, column=1, sticky="e", pady=3, padx=(12, 0))
             self.output_labels[key] = value
         return card
@@ -500,14 +519,14 @@ class TradingRiskCockpit(tk.Tk):
         ]
         for idx, label in enumerate(primary):
             card = self._card(metrics, padding=14)
-            card.grid(row=1 + idx // 4, column=idx % 4, sticky="ew", padx=5, pady=5)
-            tk.Label(card, text=label, bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 10, "bold")).pack(anchor="w")
-            value = tk.Label(card, text="-", bg="#ffffff", fg=self.colors["text"], font=("Helvetica Neue", 15, "bold"))
+            self._grid_card(card, row=1 + idx // 4, column=idx % 4, sticky="ew", padx=7, pady=7)
+            tk.Label(card, text=label, bg=self.colors["glass"], fg=self.colors["muted"], font=("Helvetica Neue", 10, "bold")).pack(anchor="w")
+            value = tk.Label(card, text="-", bg=self.colors["glass"], fg=self.colors["text"], font=("Helvetica Neue", 15, "bold"))
             value.pack(anchor="w", pady=(4, 0))
             self.metric_labels[label] = value
 
         secondary = self._card(metrics, padding=14)
-        secondary.grid(row=3, column=0, columnspan=4, sticky="ew", pady=(14, 0))
+        self._grid_card(secondary, row=3, column=0, columnspan=4, sticky="ew", pady=(16, 0))
         secondary.columnconfigure(1, weight=1)
         for idx, label in enumerate(
             (
@@ -522,10 +541,10 @@ class TradingRiskCockpit(tk.Tk):
                 "Max trades per day status",
             )
         ):
-            tk.Label(secondary, text=label, bg="#ffffff", fg=self.colors["muted"], font=("Helvetica Neue", 10)).grid(
+            tk.Label(secondary, text=label, bg=self.colors["glass"], fg=self.colors["muted"], font=("Helvetica Neue", 10)).grid(
                 row=idx, column=0, sticky="w", pady=3
             )
-            value = tk.Label(secondary, text="-", bg="#ffffff", fg=self.colors["text"], font=("Helvetica Neue", 11, "bold"))
+            value = tk.Label(secondary, text="-", bg=self.colors["glass"], fg=self.colors["text"], font=("Helvetica Neue", 11, "bold"))
             value.grid(row=idx, column=1, sticky="e", pady=3)
             self.metric_labels[label] = value
 
@@ -546,27 +565,27 @@ class TradingRiskCockpit(tk.Tk):
             row=0, column=0, columnspan=2, sticky="w", pady=(0, 10)
         )
         risk_card = self._settings_card(trading, "Risk defaults")
-        risk_card.grid(row=1, column=0, sticky="nsew", padx=(0, 6), pady=6)
+        self._grid_card(risk_card, row=1, column=0, sticky="nsew", padx=(0, 8), pady=8)
         self._settings_entry(risk_card, 1, "Default risk", "default_risk")
         self._settings_entry(risk_card, 2, "Hard max risk", "hard_max_risk")
         self._settings_entry(risk_card, 3, "Default buffer %", "default_buffer")
 
         exposure_card = self._settings_card(trading, "Exposure limits")
-        exposure_card.grid(row=1, column=1, sticky="nsew", padx=(6, 0), pady=6)
+        self._grid_card(exposure_card, row=1, column=1, sticky="nsew", padx=(8, 0), pady=8)
         self._settings_entry(exposure_card, 1, "Default exposure limit", "default_exposure_limit")
 
         daily_card = self._settings_card(trading, "Daily rules")
-        daily_card.grid(row=2, column=0, sticky="nsew", padx=(0, 6), pady=6)
+        self._grid_card(daily_card, row=2, column=0, sticky="nsew", padx=(0, 8), pady=8)
         self._settings_entry(daily_card, 1, "Max daily loss", "daily_loss_limit")
         self._settings_entry(daily_card, 2, "Max trades per day", "max_trades_per_day")
 
         fx_card = self._settings_card(trading, "FX defaults")
-        fx_card.grid(row=2, column=1, sticky="nsew", padx=(6, 0), pady=6)
+        self._grid_card(fx_card, row=2, column=1, sticky="nsew", padx=(8, 0), pady=8)
         for offset, currency in enumerate(FX_CURRENCIES, start=1):
             self._settings_entry(fx_card, offset, currency, f"fx_{currency}")
 
         ui_card = self._settings_card(trading, "UI preferences")
-        ui_card.grid(row=3, column=0, columnspan=2, sticky="ew", pady=6)
+        self._grid_card(ui_card, row=3, column=0, columnspan=2, sticky="ew", pady=8)
         ttk.Label(ui_card, text="Light workstation layout is enabled by default.", style="Subtle.TLabel").grid(row=1, column=0, columnspan=2, sticky="w")
         ttk.Button(trading, text="Save Settings", style="Accent.TButton", command=self.save_settings).grid(
             row=4, column=0, columnspan=2, sticky="ew", pady=(14, 0)
@@ -583,6 +602,7 @@ class TradingRiskCockpit(tk.Tk):
             text="Keys are saved locally in .env and ignored by Git. API support is read-only.",
             style="Panel.TLabel",
             foreground=self.colors["muted"],
+            wraplength=420,
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 8))
         api_rows = [
             ("Trading 212 API key", "TRADING212_API_KEY"),
@@ -590,9 +610,12 @@ class TradingRiskCockpit(tk.Tk):
             ("IG username", "IG_USERNAME"),
             ("IG password", "IG_PASSWORD"),
             ("IG account type", "IG_ACCOUNT_TYPE"),
+            ("Twelve Data API key", "TWELVE_DATA_API_KEY"),
             ("Market data API key", "MARKET_DATA_API_KEY"),
         ]
+        last_api_row = 1
         for row, (label, key) in enumerate(api_rows, start=2):
+            last_api_row = row
             ttk.Label(api, text=label, style="Panel.TLabel").grid(row=row, column=0, sticky="w", pady=5)
             var = tk.StringVar()
             if key == "IG_ACCOUNT_TYPE":
@@ -603,13 +626,16 @@ class TradingRiskCockpit(tk.Tk):
                 show = "*" if "PASSWORD" in key or "KEY" in key else ""
                 ttk.Entry(api, textvariable=var, show=show).grid(row=row, column=1, sticky="ew", pady=5, padx=(8, 0))
             self.api_vars[key] = var
-        ttk.Button(api, text="Save API Keys", command=self.save_api_settings).grid(row=8, column=0, columnspan=2, sticky="ew", pady=(16, 0))
+        ttk.Button(api, text="Save API Keys", style="Accent.TButton", command=self.save_api_settings).grid(
+            row=last_api_row + 1, column=0, columnspan=2, sticky="ew", pady=(16, 0)
+        )
         ttk.Label(
             api,
-            text="Safety: the app never auto-submits trades. yfinance data may be delayed.",
+            text="Safety: the app never auto-submits trades. Market data is for autofill only. Use broker price for final execution.",
             style="Panel.TLabel",
             foreground=self.colors["orange"],
-        ).grid(row=9, column=0, columnspan=2, sticky="w", pady=(16, 0))
+            wraplength=420,
+        ).grid(row=last_api_row + 2, column=0, columnspan=2, sticky="w", pady=(16, 0))
 
     def _settings_entry(self, parent: ttk.Frame, row: int, label: str, key: str) -> None:
         ttk.Label(parent, text=label, style="Panel.TLabel").grid(row=row, column=0, sticky="w", pady=5)
@@ -821,7 +847,7 @@ class TradingRiskCockpit(tk.Tk):
         reasons = invalid_reasons + [reason for reason in reasons if reason not in invalid_reasons]
 
         self._set_quality_card("Overall verdict", verdict, verdict_status, "Target: Ideal / Acceptable", "")
-        self._write_improvements(reasons or ["No obvious issues."])
+        self._write_improvements(reasons or ["No major issues."])
         return reasons
 
     def _quality_assessments(self, values: TradeInputs, result) -> dict[str, dict[str, object]]:
@@ -890,7 +916,7 @@ class TradingRiskCockpit(tk.Tk):
                 "reasons": risk_reasons,
             },
             "Exposure size": {
-                "value": f"Exposure: GBP {result.exposure_gbp:,.0f} | Margin: GBP {result.required_margin_gbp:,.0f} | {result.leverage:g}x",
+                "value": f"GBP {result.exposure_gbp:,.0f} exposure\nGBP {result.required_margin_gbp:,.0f} margin | {result.leverage:g}x",
                 "status": exposure_status,
                 "target": f"Target: <= GBP {exposure_limit:g}",
                 "gap": exposure_gap,
@@ -985,15 +1011,15 @@ class TradingRiskCockpit(tk.Tk):
         assert isinstance(value_label, tk.Label)
         assert isinstance(target_label, tk.Label)
         assert isinstance(gap_label, tk.Label)
-        frame.configure(bg="#ffffff", highlightbackground=fg if status == "red" else self.colors["border"])
+        frame.configure(bg=self.colors["glass"], highlightbackground=fg if status == "red" else self.colors["border"])
         for child in frame.winfo_children():
             if isinstance(child, tk.Frame):
-                child.configure(bg="#ffffff")
-        title.configure(bg="#ffffff", fg=self.colors["muted"])
+                child.configure(bg=self.colors["glass"])
+        title.configure(bg=self.colors["glass"], fg=self.colors["muted"])
         badge.configure(text=badge_text, bg=badge_bg, fg=fg)
-        value_label.configure(text=value, bg="#ffffff", fg=self.colors["text"] if status != "red" else fg)
-        target_label.configure(text=target_text, bg="#ffffff", fg=self.colors["muted"])
-        gap_label.configure(text=gap_text, bg="#ffffff", fg=fg if gap_text else self.colors["muted"])
+        value_label.configure(text=value, bg=self.colors["glass"], fg=self.colors["text"] if status != "red" else fg)
+        target_label.configure(text=target_text, bg=self.colors["glass"], fg=self.colors["muted"])
+        gap_label.configure(text=gap_text, bg=self.colors["glass"], fg=fg if gap_text else self.colors["muted"])
 
     def _write_improvements(self, reasons: list[str]) -> None:
         cleaned: list[str] = []
@@ -1003,7 +1029,9 @@ class TradingRiskCockpit(tk.Tk):
         for child in self.improve_frame.winfo_children():
             child.destroy()
         for idx, reason in enumerate(cleaned[:6]):
-            label = ttk.Label(self.improve_frame, text=f"- {reason}", style="Subtle.TLabel")
+            prefix = "OK" if "No major issues" in reason else "-"
+            color = self.colors["green"] if "No major issues" in reason else self.colors["muted"]
+            label = ttk.Label(self.improve_frame, text=f"{prefix} {reason}", style="Subtle.TLabel", foreground=color, wraplength=440)
             label.grid(row=idx, column=0, sticky="w", pady=1)
 
     def refresh_price(self) -> None:
@@ -1018,7 +1046,7 @@ class TradingRiskCockpit(tk.Tk):
             return
         self.vars["entry"].set(f"{quote.value:.4f}")
         delay = " delayed" if quote.delayed else ""
-        self.last_price_var.set(f"Last price: {quote.value:.4f} from {quote.source}{delay} at {quote.timestamp}")
+        self.last_price_var.set(f"Latest: {quote.value:.4f} | {quote.source}{delay} | {quote.timestamp}. Use broker price for final execution.")
 
     def refresh_fx(self) -> None:
         currency = self.vars["currency"].get()
@@ -1029,7 +1057,7 @@ class TradingRiskCockpit(tk.Tk):
             return
         self.vars["fx_rate"].set(f"{quote.value:.6f}")
         delay = " delayed" if quote.delayed else ""
-        self.last_fx_var.set(f"FX source: {quote.source}{delay} at {quote.timestamp}")
+        self.last_fx_var.set(f"FX: {quote.value:.6f} | {quote.source}{delay} | {quote.timestamp}. Manual override available.")
 
     def _write_warnings(self, messages: list[str]) -> None:
         for child in self.warning_frame.winfo_children():

@@ -36,7 +36,7 @@ Use **Show Advanced fields** to edit FX rate, asset type, leverage, support/resi
 
 ## Instrument Profiles
 
-- `TSLA`, `NVDA`, `AMD`, `MSFT`, `PLTR`: USD stock/CFD profile
+- `TSLA`, `NVDA`, `AMD`, `MSFT`, `PLTR`, `ASML`: USD stock/CFD profile
 - `TECH100`, `USA500`: USD index
 - `NDX`, `SPX`: USD index aliases
 - `GER40`: EUR index
@@ -49,7 +49,7 @@ Use **Show Advanced fields** to edit FX rate, asset type, leverage, support/resi
 
 The app auto-fills typical UK/EU retail CFD leverage defaults, and the leverage field can be manually overridden if your broker uses a different rate.
 
-- Stock CFDs such as `TSLA`, `NVDA`, `AMD`, `MSFT`, `PLTR`: `5x`
+- Stock CFDs such as `TSLA`, `NVDA`, `AMD`, `MSFT`, `PLTR`, `ASML`: `5x`
 - Major indices such as `TECH100`, `NDX`, `USA500`, `SPX`, `GER40`, `UK100`: `20x`
 - Major forex pairs such as `EURUSD`, `GBPUSD`, `USDJPY`: `30x`
 - Gold `XAUUSD`: `20x`
@@ -91,12 +91,23 @@ API keys are saved locally in `.env`, which is ignored by Git.
 
 ## Optional Live Data
 
-The app includes `market_data.py` with a provider interface and a free/simple `yfinance` fallback where possible. It can fetch latest available FX rates and prices for common instruments, then fill Entry Price or FX Rate.
+The app includes `market_data.py` with a provider interface, Twelve Data support, and a free/simple `yfinance` fallback where possible. It can fetch latest available FX rates and prices for common instruments, then fill Entry Price or FX Rate.
+
+To use Twelve Data:
+
+1. Create an account and API key at [twelvedata.com](https://twelvedata.com/).
+2. Add the key in the Settings tab, or create a local `.env` file:
+
+```bash
+TWELVE_DATA_API_KEY=your_key_here
+```
+
+`.env` is ignored by Git. Never commit API keys.
 
 Supported refresh targets include:
 
 - FX: `USDGBP`, `EURGBP`, `CHFGBP`, `JPYGBP`, `CADGBP`, `AUDGBP`, `NZDGBP`
-- Prices: `TSLA`, `NVDA`, `AMD`, `MSFT`, `PLTR`, `TECH100` / `NDX`, `USA500` / `SPX`, `GER40`, `UK100`, `XAGUSD`, `XAUUSD`, `OIL` / `CRUDE`, `BTCUSD`, `ETHUSD`, `EURUSD`, `GBPUSD`, `USDJPY`
+- Prices: `TSLA`, `NVDA`, `AMD`, `MSFT`, `PLTR`, `ASML`, `NDX` / `TECH100` where supported, `SPY`, `QQQ`, `XAG/USD`, `XAU/USD`, `BTC/USD`, `ETH/USD`, plus existing yfinance fallbacks for common indices and commodities.
 
 Buttons:
 
@@ -109,7 +120,9 @@ Safety notes:
 
 - The app never auto-submits trades.
 - Do not store API keys in GitHub.
-- Free market data can be delayed. The app warns when `yfinance` data is used.
+- Market data is only for convenience/autofill.
+- If live price differs from your broker, use broker price for final execution.
+- Free market data can be delayed. The app warns when delayed/fallback data is used.
 
 ## Core Formulas
 

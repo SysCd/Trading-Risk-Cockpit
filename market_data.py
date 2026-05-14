@@ -7,9 +7,12 @@ or FX rates for display and calculator prefill.
 from __future__ import annotations
 
 import datetime as dt
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 
 ENV_PATH = Path(".env")
@@ -20,6 +23,7 @@ PRICE_SYMBOLS = {
     "AMD": "AMD",
     "MSFT": "MSFT",
     "PLTR": "PLTR",
+    "ASML": "ASML",
     "TECH100": "^NDX",
     "NDX": "^NDX",
     "USA500": "^GSPC",
@@ -35,6 +39,33 @@ PRICE_SYMBOLS = {
     "EURUSD": "EURUSD=X",
     "GBPUSD": "GBPUSD=X",
     "USDJPY": "JPY=X",
+}
+
+TWELVE_DATA_PRICE_SYMBOLS = {
+    "TSLA": ("TSLA",),
+    "NVDA": ("NVDA",),
+    "AMD": ("AMD",),
+    "MSFT": ("MSFT",),
+    "PLTR": ("PLTR",),
+    "ASML": ("ASML",),
+    "NDX": ("NDX", "QQQ"),
+    "TECH100": ("NDX", "QQQ"),
+    "SPY": ("SPY",),
+    "QQQ": ("QQQ",),
+    "XAGUSD": ("XAG/USD",),
+    "XAUUSD": ("XAU/USD",),
+    "BTCUSD": ("BTC/USD",),
+    "ETHUSD": ("ETH/USD",),
+}
+
+TWELVE_DATA_FX_SYMBOLS = {
+    "USD": "USD/GBP",
+    "EUR": "EUR/GBP",
+    "CHF": "CHF/GBP",
+    "JPY": "JPY/GBP",
+    "CAD": "CAD/GBP",
+    "AUD": "AUD/GBP",
+    "NZD": "NZD/GBP",
 }
 
 FX_SYMBOLS = {
@@ -77,6 +108,50 @@ class ManualProvider:
         if currency.upper() == "GBP":
             return MarketQuote("GBPGBP", 1.0, self.name, _now(), delayed=False)
         return None
+
+
+class TwelveDataProvider:
+    name = "Twelve Data"
+
+    def __init__(self, api_key: str = "") -> None:
+        self.api_key = api_key.strip()
+
+    def _price(self, symbol: str) -> MarketQuote | None:
+        if not self.api_key:
+            return None
+        params = urlencode({"symbol": symbol, "apikey": self.api_key})
+        url = f"https://api.twelvedata.com/price?{params}"
+        try:
+            with urlopen(url, timeout=8) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except Exception:
+            return None
+        if "price" not in payload:
+            return None
+        try:
+            value = float(payload["price"])
+        except (TypeError, ValueError):
+            return None
+        return MarketQuote(symbol, value, self.name, _now(), delayed=True)
+
+    def get_price(self, instrument: str) -> MarketQuote | None:
+        symbols = TWELVE_DATA_PRICE_SYMBOLS.get(instrument.upper())
+        if not symbols:
+            return None
+        for symbol in symbols:
+            quote = self._price(symbol)
+            if quote is not None:
+                return quote
+        return None
+
+    def get_fx_to_gbp(self, currency: str) -> MarketQuote | None:
+        currency = currency.upper()
+        if currency == "GBP":
+            return MarketQuote("GBP/GBP", 1.0, self.name, _now(), delayed=False)
+        symbol = TWELVE_DATA_FX_SYMBOLS.get(currency)
+        if not symbol:
+            return None
+        return self._price(symbol)
 
 
 class YFinanceProvider:
@@ -171,6 +246,7 @@ class MarketDataService:
         env = env_values or load_env()
         self.providers: list[MarketDataProvider] = [
             ManualProvider(),
+            TwelveDataProvider(env.get("TWELVE_DATA_API_KEY", "")),
             YFinanceProvider(),
             Trading212Provider(env.get("TRADING212_API_KEY", "")),
             IGProvider(
@@ -223,6 +299,7 @@ def save_env(values: dict[str, str], path: Path | str = ENV_PATH) -> None:
         "IG_PASSWORD",
         "IG_ACCOUNT_TYPE",
         "MARKET_DATA_API_KEY",
+        "TWELVE_DATA_API_KEY",
     ]
     lines = ["# Local API keys for Trading Risk Cockpit. Do not commit this file."]
     for key in keys:
